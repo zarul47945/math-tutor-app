@@ -389,19 +389,22 @@ function RoomExperience({
   const [whiteboardStrokes, setWhiteboardStrokes] = useState<WhiteboardStroke[]>([]);
   const [timerNow, setTimerNow] = useState(0);
   const skipNextTherapyBroadcastRef = useRef(false);
-  const orderedTracks = useMemo(
+  const remoteParticipants = useMemo(
     () =>
-      [...tracks]
-        .filter((trackRef) => !trackRef.participant.isLocal)
-        .sort((leftTrack, rightTrack) => {
-        if (leftTrack.participant.isLocal === rightTrack.participant.isLocal) {
-          return leftTrack.participant.identity.localeCompare(
-            rightTrack.participant.identity,
-          );
-        }
-
-        return leftTrack.participant.isLocal ? -1 : 1;
-        }),
+      [...participants]
+        .filter((participant) => !participant.isLocal)
+        .sort((leftParticipant, rightParticipant) =>
+          leftParticipant.identity.localeCompare(rightParticipant.identity),
+        ),
+    [participants],
+  );
+  const remoteCameraTrackByIdentity = useMemo(
+    () =>
+      new Map(
+        tracks
+          .filter((trackRef) => !trackRef.participant.isLocal)
+          .map((trackRef) => [trackRef.participant.identity, trackRef]),
+      ),
     [tracks],
   );
   const localParticipantLabel =
@@ -1035,13 +1038,23 @@ function RoomExperience({
               participantLabel={localParticipantLabel}
               track={effectiveLocalVideoTrack}
             />
-            {orderedTracks.map((trackRef, index) => (
-              <RoomVideoTile
-                key={`${trackRef.participant.identity}-${trackRef.source}`}
-                priority={index === 0 && orderedTracks.length === 1}
-                trackRef={trackRef}
-              />
-            ))}
+            {remoteParticipants.length > 0 ? (
+              remoteParticipants.map((participant, index) => (
+                <RoomVideoTile
+                  key={participant.identity}
+                  participant={participant}
+                  priority={index === 0}
+                  trackRef={
+                    remoteCameraTrackByIdentity.get(participant.identity) ?? null
+                  }
+                />
+              ))
+            ) : (
+              <div className="flex min-h-[280px] items-center justify-center rounded-[28px] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-soft)] px-6 text-center text-sm leading-6 text-[var(--color-text-soft)]">
+                Waiting for the other person to join the lesson room and turn on
+                their camera.
+              </div>
+            )}
           </div>
           {whiteboardEnabled ? (
             <WhiteboardOverlay

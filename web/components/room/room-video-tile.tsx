@@ -5,22 +5,33 @@ import {
   isTrackReference,
   type TrackReferenceOrPlaceholder,
 } from "@livekit/components-react";
+import type { Participant } from "livekit-client";
 import { useRef } from "react";
 
 import { FullscreenToggle } from "@/components/room/fullscreen-toggle";
 import { Badge } from "@/components/ui/badge";
 
 export function RoomVideoTile({
+  participant,
   priority = false,
   trackRef,
 }: {
+  participant?: Participant;
   priority?: boolean;
-  trackRef: TrackReferenceOrPlaceholder;
+  trackRef?: TrackReferenceOrPlaceholder | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const participant = trackRef.participant;
-  const participantLabel = participant.name?.trim() || participant.identity;
-  const hasCameraTrack = isTrackReference(trackRef);
+  const resolvedParticipant = participant ?? trackRef?.participant;
+
+  if (!resolvedParticipant) {
+    return null;
+  }
+
+  const targetParticipant = resolvedParticipant;
+  const participantLabel =
+    targetParticipant.name?.trim() || targetParticipant.identity;
+  const resolvedTrackRef = trackRef && isTrackReference(trackRef) ? trackRef : undefined;
+  const hasCameraTrack = Boolean(resolvedTrackRef);
 
   return (
     <div
@@ -31,7 +42,7 @@ export function RoomVideoTile({
       {hasCameraTrack ? (
         <VideoTrack
           className="lesson-video-media h-full min-h-[280px] w-full bg-[var(--color-surface-strong)] object-cover"
-          trackRef={trackRef}
+          trackRef={resolvedTrackRef}
         />
       ) : (
         <div className="lesson-video-fallback flex min-h-[280px] items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(22,93,255,0.38),_rgba(15,23,42,0.96)_55%)] px-6">
@@ -50,13 +61,13 @@ export function RoomVideoTile({
         <div className="space-y-1">
           <p className="text-sm font-semibold text-white">{participantLabel}</p>
           <div className="flex flex-wrap gap-2">
-            {participant.isLocal ? (
+            {targetParticipant.isLocal ? (
               <Badge className="bg-white/15 text-white">You</Badge>
             ) : null}
-            {!participant.isMicrophoneEnabled ? (
+            {!targetParticipant.isMicrophoneEnabled ? (
               <Badge className="bg-black/35 text-white">Mic off</Badge>
             ) : null}
-            {!participant.isCameraEnabled ? (
+            {!targetParticipant.isCameraEnabled ? (
               <Badge className="bg-black/35 text-white">Camera off</Badge>
             ) : null}
           </div>
