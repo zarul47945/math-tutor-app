@@ -12,14 +12,7 @@ import {
   useTracks,
 } from "@livekit/components-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  Track,
-  createLocalAudioTrack,
-  createLocalVideoTrack,
-  type LocalAudioTrack,
-  type LocalTrackPublication,
-  type LocalVideoTrack,
-} from "livekit-client";
+import { Track } from "livekit-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -141,44 +134,6 @@ function ensureDeviceAccessSupport() {
       "This browser cannot access camera or microphone devices. Open the lesson in Chrome or Edge instead.",
     );
   }
-}
-
-async function createAndPublishCameraTrack(
-  localParticipant: ReturnType<typeof useLocalParticipant>["localParticipant"],
-  shouldPublish: boolean,
-) {
-  const videoTrack = await createLocalVideoTrack();
-  let publication: LocalTrackPublication | null = null;
-
-  if (shouldPublish) {
-    publication = await localParticipant.publishTrack(videoTrack, {
-      source: Track.Source.Camera,
-    });
-  }
-
-  return {
-    publication,
-    videoTrack,
-  };
-}
-
-async function createAndPublishMicrophoneTrack(
-  localParticipant: ReturnType<typeof useLocalParticipant>["localParticipant"],
-  shouldPublish: boolean,
-) {
-  const audioTrack = await createLocalAudioTrack();
-  let publication: LocalTrackPublication | null = null;
-
-  if (shouldPublish) {
-    publication = await localParticipant.publishTrack(audioTrack, {
-      source: Track.Source.Microphone,
-    });
-  }
-
-  return {
-    audioTrack,
-    publication,
-  };
 }
 
 export function LiveRoom({
@@ -331,6 +286,7 @@ export function LiveRoom({
           joinCode={tokenResponse.roomName}
           participantId={participantId}
           role={role}
+          roomError={error}
           sessionId={sessionId}
           sessionTitle={sessionTitle}
           studentName={studentName}
@@ -347,6 +303,7 @@ function RoomExperience({
   joinCode,
   participantId,
   role,
+  roomError,
   sessionId,
   sessionTitle,
   studentName,
@@ -356,6 +313,7 @@ function RoomExperience({
   joinCode: string;
   participantId?: string;
   role: LiveKitRole;
+  roomError?: string | null;
   sessionId: string;
   sessionTitle?: string;
   studentName?: string;
@@ -372,13 +330,6 @@ function RoomExperience({
   const [isLeaving, setIsLeaving] = useState(false);
   const [isTimerPending, setIsTimerPending] = useState(false);
   const [joinedStudents, setJoinedStudents] = useState<SessionParticipant[]>([]);
-  const [localCameraPublication, setLocalCameraPublication] =
-    useState<LocalTrackPublication | null>(null);
-  const [localCameraTrack, setLocalCameraTrack] = useState<LocalVideoTrack | null>(null);
-  const [localMicrophonePublication, setLocalMicrophonePublication] =
-    useState<LocalTrackPublication | null>(null);
-  const [localMicrophoneTrack, setLocalMicrophoneTrack] =
-    useState<LocalAudioTrack | null>(null);
   const [sessionState, setSessionState] = useState(initialRoomState);
   const [therapyAnswers, setTherapyAnswers] = useState<TherapyAnswerMap>({});
   const [therapySubmitted, setTherapySubmitted] = useState(false);
@@ -409,9 +360,9 @@ function RoomExperience({
   );
   const localParticipantLabel =
     localParticipant.name?.trim() || localParticipant.identity || "You";
-  const effectiveLocalVideoTrack = localCameraTrack ?? cameraTrack?.videoTrack ?? null;
-  const isLocalCameraActive = Boolean(effectiveLocalVideoTrack);
-  const isLocalMicrophoneActive = Boolean(localMicrophoneTrack) || isMicrophoneEnabled;
+  const effectiveLocalVideoTrack = cameraTrack?.videoTrack ?? null;
+  const isLocalCameraActive = Boolean(effectiveLocalVideoTrack) || isCameraEnabled;
+  const isLocalMicrophoneActive = isMicrophoneEnabled;
 
   const displayedElapsedSeconds = useMemo(
     () => calculateDisplayedSeconds(sessionState, timerNow),
@@ -507,100 +458,6 @@ function RoomExperience({
     therapyAnswers,
     therapyInkStrokes,
     therapySubmitted,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      if (localCameraTrack) {
-        localCameraTrack.stop();
-        localCameraTrack.detach();
-      }
-    };
-  }, [localCameraTrack]);
-
-  useEffect(() => {
-    return () => {
-      if (localMicrophoneTrack) {
-        localMicrophoneTrack.stop();
-      }
-    };
-  }, [localMicrophoneTrack]);
-
-  useEffect(() => {
-    if (
-      !localCameraTrack ||
-      localCameraPublication ||
-      connectionState !== "connected"
-    ) {
-      return;
-    }
-
-    let isCancelled = false;
-
-    void (async () => {
-      try {
-        const publication = await localParticipant.publishTrack(localCameraTrack, {
-          source: Track.Source.Camera,
-        });
-
-        if (!isCancelled) {
-          setLocalCameraPublication(publication);
-        }
-      } catch (publishError) {
-        if (!isCancelled) {
-          setFeedback(
-            publishError instanceof Error
-              ? publishError.message
-              : "Your camera preview is on, but the lesson room could not publish it yet.",
-          );
-        }
-      }
-    })();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [connectionState, localCameraPublication, localCameraTrack, localParticipant]);
-
-  useEffect(() => {
-    if (
-      !localMicrophoneTrack ||
-      localMicrophonePublication ||
-      connectionState !== "connected"
-    ) {
-      return;
-    }
-
-    let isCancelled = false;
-
-    void (async () => {
-      try {
-        const publication = await localParticipant.publishTrack(localMicrophoneTrack, {
-          source: Track.Source.Microphone,
-        });
-
-        if (!isCancelled) {
-          setLocalMicrophonePublication(publication);
-        }
-      } catch (publishError) {
-        if (!isCancelled) {
-          setFeedback(
-            publishError instanceof Error
-              ? publishError.message
-              : "Your microphone is on, but the lesson room could not publish it yet.",
-          );
-        }
-      }
-    })();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    connectionState,
-    localMicrophonePublication,
-    localMicrophoneTrack,
-    localParticipant,
   ]);
 
   useEffect(() => {
@@ -773,35 +630,11 @@ function RoomExperience({
       ensureDeviceAccessSupport();
 
       if (!isLocalMicrophoneActive) {
-        const { audioTrack, publication } = await createAndPublishMicrophoneTrack(
-          localParticipant,
-          connectionState === "connected",
-        );
-        setLocalMicrophoneTrack(audioTrack);
-        setLocalMicrophonePublication(publication);
+        await localParticipant.setMicrophoneEnabled(true);
         return;
       }
 
-      if (localMicrophonePublication && localMicrophoneTrack) {
-        try {
-          await localParticipant.unpublishTrack(localMicrophoneTrack);
-        } catch {
-          // Keep the local UI responsive even if the room publish state is stale.
-        }
-      } else if (isMicrophoneEnabled) {
-        try {
-          await localParticipant.setMicrophoneEnabled(false);
-        } catch {
-          // The direct local track below is still stopped either way.
-        }
-      }
-
-      if (localMicrophoneTrack) {
-        localMicrophoneTrack.stop();
-      }
-
-      setLocalMicrophonePublication(null);
-      setLocalMicrophoneTrack(null);
+      await localParticipant.setMicrophoneEnabled(false);
     } catch (microphoneError) {
       setFeedback(getMediaErrorMessage(microphoneError, "microphone"));
     }
@@ -814,36 +647,11 @@ function RoomExperience({
       ensureDeviceAccessSupport();
 
       if (!isLocalCameraActive) {
-        const { publication, videoTrack } = await createAndPublishCameraTrack(
-          localParticipant,
-          connectionState === "connected",
-        );
-        setLocalCameraTrack(videoTrack);
-        setLocalCameraPublication(publication);
+        await localParticipant.setCameraEnabled(true);
         return;
       }
 
-      if (localCameraPublication && localCameraTrack) {
-        try {
-          await localParticipant.unpublishTrack(localCameraTrack);
-        } catch {
-          // Keep the local UI responsive even if the room publish state is stale.
-        }
-      } else if (isCameraEnabled) {
-        try {
-          await localParticipant.setCameraEnabled(false);
-        } catch {
-          // The direct local track below is still stopped either way.
-        }
-      }
-
-      if (localCameraTrack) {
-        localCameraTrack.stop();
-        localCameraTrack.detach();
-      }
-
-      setLocalCameraPublication(null);
-      setLocalCameraTrack(null);
+      await localParticipant.setCameraEnabled(false);
     } catch (cameraError) {
       setFeedback(getMediaErrorMessage(cameraError, "camera"));
     }
@@ -1023,9 +831,9 @@ function RoomExperience({
             whiteboardEnabled={whiteboardEnabled}
           />
 
-          {feedback ? (
+          {roomError ?? feedback ? (
             <div className="rounded-2xl bg-[var(--color-surface-soft)] px-4 py-3 text-sm text-[var(--color-text-soft)]">
-              {feedback}
+              {roomError ?? feedback}
             </div>
           ) : null}
         </Card>
