@@ -92,14 +92,8 @@ export function TherapyDemoSheet({
   const strokeColor = role === "teacher" ? TEACHER_INK : STUDENT_INK;
   const isStudentEditor = role === "student";
   const canEdit = isStudentEditor && !submitted;
-  const visibleAnswers = useMemo(
-    () => (isStudentEditor || submitted ? answers : ({} as TherapyAnswerMap)),
-    [answers, isStudentEditor, submitted],
-  );
-  const visibleInkStrokes = useMemo(
-    () => (isStudentEditor || submitted ? inkStrokes : []),
-    [inkStrokes, isStudentEditor, submitted],
-  );
+  const visibleAnswers = useMemo(() => answers, [answers]);
+  const visibleInkStrokes = useMemo(() => inkStrokes, [inkStrokes]);
   const setScores = useMemo(
     () =>
       Object.fromEntries(
@@ -325,7 +319,7 @@ export function TherapyDemoSheet({
                       with a stylus or mouse.
                     </>
                   )
-                : "Teacher view is read-only. The timer shows when the student is working, and answers stay hidden until the student submits the worksheet."}
+                : "Teacher view is read-only. The teacher can watch the student answer live, while marks stay hidden until final submission."}
             </p>
           </div>
         </div>
@@ -510,8 +504,8 @@ export function TherapyDemoSheet({
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-[24px] bg-[var(--color-surface-soft)] px-4 py-4 text-sm leading-6 text-[var(--color-text-soft)]">
-          {!isStudentEditor && !submitted
-            ? "The teacher sees a supervised worksheet state only. Live answer content and handwriting stay private until final submission."
+          {!isStudentEditor
+            ? "The teacher can watch live typed answers and handwriting as the student works, but the teacher cannot edit the worksheet."
             : submitted
             ? "The worksheet has been submitted. Reset the worksheet to try a fresh timed attempt."
             : inputMode === "keyboard"
