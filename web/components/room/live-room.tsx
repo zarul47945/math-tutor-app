@@ -35,7 +35,9 @@ import {
 import type {
   TherapyAnswerMap,
   TherapyInkStroke,
+  TherapySubmittedSetMap,
 } from "@/lib/therapy-demo";
+import { THERAPY_DEMO_SETS } from "@/lib/therapy-demo";
 import { fetchLiveKitToken } from "@/lib/livekit/token";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -79,6 +81,12 @@ function normalizeTimerState(state: SessionRoomState | TimerSignalState): TimerS
 
 function hasAnyTherapyAnswer(answers: TherapyAnswerMap) {
   return Object.values(answers).some((value) => value.trim() !== "");
+}
+
+function createEmptyTherapySubmittedSets(): TherapySubmittedSetMap {
+  return Object.fromEntries(
+    THERAPY_DEMO_SETS.map((set) => [set.id, false]),
+  ) as TherapySubmittedSetMap;
 }
 
 type DeviceKind = "camera" | "microphone";
@@ -339,7 +347,8 @@ function RoomExperience({
   const [sessionState, setSessionState] = useState(initialRoomState);
   const [therapyAnswers, setTherapyAnswers] = useState<TherapyAnswerMap>({});
   const [therapyRevision, setTherapyRevision] = useState(0);
-  const [therapySubmitted, setTherapySubmitted] = useState(false);
+  const [therapySubmittedSets, setTherapySubmittedSets] =
+    useState<TherapySubmittedSetMap>(() => createEmptyTherapySubmittedSets());
   const [therapyInkStrokes, setTherapyInkStrokes] = useState<TherapyInkStroke[]>(
     [],
   );
@@ -350,7 +359,9 @@ function RoomExperience({
   const therapyAnswersRef = useRef<TherapyAnswerMap>({});
   const therapyInkStrokesRef = useRef<TherapyInkStroke[]>([]);
   const therapyRevisionRef = useRef(0);
-  const therapySubmittedRef = useRef(false);
+  const therapySubmittedSetsRef = useRef<TherapySubmittedSetMap>(
+    createEmptyTherapySubmittedSets(),
+  );
   const remoteParticipants = useMemo(
     () =>
       [...participants]
@@ -396,37 +407,37 @@ function RoomExperience({
     answers,
     revision,
     strokes,
-    submitted,
+    submittedSets,
   }: {
     answers: TherapyAnswerMap;
     revision: number;
     strokes: TherapyInkStroke[];
-    submitted: boolean;
+    submittedSets: TherapySubmittedSetMap;
   }) => {
     therapyAnswersRef.current = answers;
     therapyInkStrokesRef.current = strokes;
     therapyRevisionRef.current = revision;
-    therapySubmittedRef.current = submitted;
+    therapySubmittedSetsRef.current = submittedSets;
     setTherapyAnswers(answers);
     setTherapyInkStrokes(strokes);
     setTherapyRevision(revision);
-    setTherapySubmitted(submitted);
+    setTherapySubmittedSets(submittedSets);
   };
 
   const createLocalTherapySnapshot = ({
     answers = therapyAnswersRef.current,
     strokes = therapyInkStrokesRef.current,
-    submitted = therapySubmittedRef.current,
+    submittedSets = therapySubmittedSetsRef.current,
   }: {
     answers?: TherapyAnswerMap;
     strokes?: TherapyInkStroke[];
-    submitted?: boolean;
+    submittedSets?: TherapySubmittedSetMap;
   }) => {
     const snapshot = {
       answers,
       revision: therapyRevisionRef.current + 1,
       strokes,
-      submitted,
+      submittedSets,
     };
 
     applyLocalTherapySnapshot(snapshot);
@@ -536,7 +547,7 @@ function RoomExperience({
           answers: therapyAnswers,
           revision: therapyRevision,
           strokes: therapyInkStrokes,
-          submitted: therapySubmitted,
+          submittedSets: therapySubmittedSets,
         }),
         {
           reliable: true,
@@ -560,7 +571,7 @@ function RoomExperience({
     therapyAnswers,
     therapyInkStrokes,
     therapyRevision,
-    therapySubmitted,
+    therapySubmittedSets,
   ]);
 
   useEffect(() => {
@@ -659,12 +670,12 @@ function RoomExperience({
     answers,
     revision,
     strokes,
-    submitted,
+    submittedSets,
   }: {
     answers: TherapyAnswerMap;
     revision: number;
     strokes: TherapyInkStroke[];
-    submitted: boolean;
+    submittedSets: TherapySubmittedSetMap;
   }) => {
     if (connectionState !== "connected") {
       return;
@@ -677,7 +688,7 @@ function RoomExperience({
           answers,
           revision,
           strokes,
-          submitted,
+          submittedSets,
         }),
         {
           reliable: true,
@@ -827,7 +838,6 @@ function RoomExperience({
     };
     const shouldStartTimer =
       role === "student" &&
-      !therapySubmitted &&
       !sessionState.timer_running &&
       !isTimerPending &&
       !hasAnyTherapyAnswer(therapyAnswersRef.current) &&
@@ -849,7 +859,6 @@ function RoomExperience({
     const nextStrokes = [...therapyInkStrokesRef.current, stroke];
     const shouldStartTimer =
       role === "student" &&
-      !therapySubmitted &&
       !sessionState.timer_running &&
       !isTimerPending &&
       !hasAnyTherapyAnswer(therapyAnswersRef.current) &&
@@ -876,7 +885,7 @@ function RoomExperience({
     return createLocalTherapySnapshot({
       answers: {},
       strokes: [],
-      submitted: false,
+      submittedSets: createEmptyTherapySubmittedSets(),
     });
   };
 
@@ -893,15 +902,24 @@ function RoomExperience({
     }
   };
 
-  const handleSubmitTherapyWorksheet = async () => {
-    if (role !== "student" || therapySubmitted || isTimerPending) {
+  const handleSubmitTherapySet = async (setId: keyof TherapySubmittedSetMap) => {
+    if (role !== "student" || therapySubmittedSets[setId] || isTimerPending) {
       return;
     }
 
-    const snapshot = createLocalTherapySnapshot({ submitted: true });
+    const nextSubmittedSets = {
+      ...therapySubmittedSetsRef.current,
+      [setId]: true,
+    };
+    const isFinalSet = THERAPY_DEMO_SETS.every(
+      (set) => nextSubmittedSets[set.id],
+    );
+    const snapshot = createLocalTherapySnapshot({
+      submittedSets: nextSubmittedSets,
+    });
     void publishTherapySnapshot(snapshot);
 
-    if (!sessionState.timer_running) {
+    if (!isFinalSet || !sessionState.timer_running) {
       return;
     }
 
@@ -1045,9 +1063,9 @@ function RoomExperience({
           onClearInk={handleClearTherapyInk}
           onResetWorksheet={handleResetTherapyWorksheet}
           onStrokeComplete={handleTherapyStrokeComplete}
-          onSubmitWorksheet={handleSubmitTherapyWorksheet}
+          onSubmitSet={handleSubmitTherapySet}
           role={role}
-          submitted={therapySubmitted}
+          submittedSets={therapySubmittedSets}
         />
 
         <StartAudio

@@ -19,6 +19,8 @@ export type TherapySet = {
 
 export type TherapyAnswerMap = Record<string, string>;
 
+export type TherapySubmittedSetMap = Record<TherapySetId, boolean>;
+
 export type TherapyInkPoint = {
   x: number;
   y: number;

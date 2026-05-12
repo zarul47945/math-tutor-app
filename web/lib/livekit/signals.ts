@@ -2,6 +2,7 @@ import type { SessionRoomState } from "@/lib/types";
 import type {
   TherapyAnswerMap,
   TherapyInkStroke,
+  TherapySubmittedSetMap,
 } from "@/lib/therapy-demo";
 
 export const ROOM_SIGNAL_TOPIC = "tutor-room";
@@ -34,7 +35,7 @@ export type RoomSignal =
       answers: TherapyAnswerMap;
       revision: number;
       strokes: TherapyInkStroke[];
-      submitted: boolean;
+      submittedSets: TherapySubmittedSetMap;
     }
   | {
       type: "whiteboard.stroke";

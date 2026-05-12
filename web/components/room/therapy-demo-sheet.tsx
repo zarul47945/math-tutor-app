@@ -10,11 +10,14 @@ import {
   getCorrectAnswerCountForSet,
   getNextTherapyQuestionId,
   getTherapyQuestionIdInDirection,
+  THERAPY_DEMO_QUESTION_BY_ID,
   THERAPY_DEMO_QUESTION_ORDER,
   THERAPY_DEMO_SETS,
   type TherapyAnswerMap,
   type TherapyInkPoint,
   type TherapyInkStroke,
+  type TherapySetId,
+  type TherapySubmittedSetMap,
 } from "@/lib/therapy-demo";
 import type { LiveKitRole } from "@/lib/types";
 import { formatSeconds } from "@/lib/utils";
@@ -62,9 +65,9 @@ export function TherapyDemoSheet({
   onClearInk,
   onResetWorksheet,
   onStrokeComplete,
-  onSubmitWorksheet,
+  onSubmitSet,
   role,
-  submitted,
+  submittedSets,
 }: {
   answers: TherapyAnswerMap;
   elapsedSeconds: number;
@@ -75,9 +78,9 @@ export function TherapyDemoSheet({
   onClearInk: () => void;
   onResetWorksheet: () => void;
   onStrokeComplete: (stroke: TherapyInkStroke) => void;
-  onSubmitWorksheet: () => void;
+  onSubmitSet: (setId: TherapySetId) => void;
   role: LiveKitRole;
-  submitted: boolean;
+  submittedSets: TherapySubmittedSetMap;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const currentStrokeRef = useRef<TherapyInkStroke | null>(null);
@@ -91,7 +94,33 @@ export function TherapyDemoSheet({
   const [inputMode, setInputMode] = useState<"keyboard" | "pen">("keyboard");
   const strokeColor = role === "teacher" ? TEACHER_INK : STUDENT_INK;
   const isStudentEditor = role === "student";
-  const canEdit = isStudentEditor && !submitted;
+  const allSetsSubmitted = THERAPY_DEMO_SETS.every(
+    (set) => submittedSets[set.id],
+  );
+  const setWorkflow = useMemo(
+    () =>
+      Object.fromEntries(
+        THERAPY_DEMO_SETS.map((set, setIndex) => {
+          const previousSet = THERAPY_DEMO_SETS[setIndex - 1];
+          const unlocked = !previousSet || submittedSets[previousSet.id];
+          const submitted = submittedSets[set.id];
+
+          return [
+            set.id,
+            {
+              editable: isStudentEditor && unlocked && !submitted,
+              submitted,
+              unlocked,
+            },
+          ];
+        }),
+      ) as Record<
+        TherapySetId,
+        { editable: boolean; submitted: boolean; unlocked: boolean }
+      >,
+    [isStudentEditor, submittedSets],
+  );
+  const canEdit = isStudentEditor && !allSetsSubmitted;
   const visibleAnswers = useMemo(() => answers, [answers]);
   const visibleInkStrokes = useMemo(() => inkStrokes, [inkStrokes]);
   const setScores = useMemo(
@@ -104,11 +133,20 @@ export function TherapyDemoSheet({
       ) as Record<(typeof THERAPY_DEMO_SETS)[number]["id"], number>,
     [answers],
   );
-  const progressLabel = submitted
-    ? "Submitted"
-    : isTimerRunning
-      ? "Student answering"
-      : "Waiting to begin";
+  const activeQuestion = THERAPY_DEMO_QUESTION_BY_ID.get(activeQuestionId);
+  const canEditActiveQuestion = Boolean(
+    activeQuestion && setWorkflow[activeQuestion.setId].editable,
+  );
+  const submittedSetCount = THERAPY_DEMO_SETS.filter(
+    (set) => submittedSets[set.id],
+  ).length;
+  const progressLabel = allSetsSubmitted
+    ? "All submitted"
+    : submittedSetCount > 0
+      ? `Set ${submittedSetCount + 1} ready`
+      : isTimerRunning
+        ? "Student answering"
+        : "Waiting to begin";
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -133,14 +171,14 @@ export function TherapyDemoSheet({
   }, []);
 
   useEffect(() => {
-    if (!canEdit || inputMode !== "keyboard" || !activeQuestionId) {
+    if (!canEditActiveQuestion || inputMode !== "keyboard" || !activeQuestionId) {
       return;
     }
 
     const activeInput = inputRefs.current[activeQuestionId];
     activeInput?.focus();
     activeInput?.select();
-  }, [activeQuestionId, canEdit, inputMode]);
+  }, [activeQuestionId, canEditActiveQuestion, inputMode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -254,7 +292,16 @@ export function TherapyDemoSheet({
       activeQuestionId,
       direction,
     );
-    setActiveQuestionId(nextQuestionId ?? activeQuestionId);
+    const nextQuestion = nextQuestionId
+      ? THERAPY_DEMO_QUESTION_BY_ID.get(nextQuestionId)
+      : null;
+
+    if (nextQuestion && setWorkflow[nextQuestion.setId].editable) {
+      setActiveQuestionId(nextQuestion.id);
+      return;
+    }
+
+    setActiveQuestionId(activeQuestionId);
   };
 
   const handleKeyDown = (
@@ -288,7 +335,26 @@ export function TherapyDemoSheet({
     if (event.key === "Enter") {
       event.preventDefault();
       const nextQuestionId = getNextTherapyQuestionId(questionId);
-      setActiveQuestionId(nextQuestionId ?? questionId);
+      const nextQuestion = nextQuestionId
+        ? THERAPY_DEMO_QUESTION_BY_ID.get(nextQuestionId)
+        : null;
+
+      setActiveQuestionId(
+        nextQuestion && setWorkflow[nextQuestion.setId].editable
+          ? nextQuestion.id
+          : questionId,
+      );
+    }
+  };
+
+  const handleSubmitSetClick = (setId: TherapySetId) => {
+    onSubmitSet(setId);
+
+    const currentSetIndex = THERAPY_DEMO_SETS.findIndex((set) => set.id === setId);
+    const nextSet = THERAPY_DEMO_SETS[currentSetIndex + 1];
+
+    if (nextSet) {
+      setActiveQuestionId(nextSet.questions[0]?.id ?? activeQuestionId);
     }
   };
 
@@ -328,39 +394,30 @@ export function TherapyDemoSheet({
           {isStudentEditor ? (
             <>
               <Button
-                disabled={submitted}
+                disabled={allSetsSubmitted}
                 onClick={() => setInputMode("keyboard")}
                 variant={inputMode === "keyboard" ? "primary" : "secondary"}
               >
                 Type answers
               </Button>
               <Button
-                disabled={submitted}
+                disabled={allSetsSubmitted}
                 onClick={() => setInputMode("pen")}
                 variant={inputMode === "pen" ? "primary" : "secondary"}
               >
                 Writing pad
               </Button>
-              <Button disabled={submitted} onClick={onClearInk} variant="secondary">
+              <Button
+                disabled={allSetsSubmitted}
+                onClick={onClearInk}
+                variant="secondary"
+              >
                 Clear writing
               </Button>
               <Button onClick={onResetWorksheet} variant="secondary">
                 Reset worksheet
               </Button>
             </>
-          ) : null}
-          {isStudentEditor ? (
-            <Button
-              disabled={submitted || isSubmitting}
-              onClick={onSubmitWorksheet}
-              variant="primary"
-            >
-              {submitted
-                ? "Submitted"
-                : isSubmitting
-                  ? "Submitting..."
-                  : "Submit final answers"}
-            </Button>
           ) : null}
         </div>
       </div>
@@ -371,16 +428,23 @@ export function TherapyDemoSheet({
       >
         <div className="border-t-4 border-dashed border-[var(--color-text)] pt-6">
           <div className="space-y-8">
-            {THERAPY_DEMO_SETS.map((set) => (
-              <section key={set.id} className="space-y-5">
-                <div className="space-y-1">
-                  <p className="text-3xl font-black text-[var(--color-text)]">
-                    {set.title}
-                  </p>
-                  <p className="text-lg text-[var(--color-text-soft)]">
-                    Selesaikan / Solve
-                  </p>
-                </div>
+            {THERAPY_DEMO_SETS.map((set) => {
+              const lastQuestionId = set.questions[set.questions.length - 1]?.id;
+              const { editable, submitted, unlocked } = setWorkflow[set.id];
+
+              return (
+                <section
+                  key={set.id}
+                  className={`space-y-5 ${unlocked ? "" : "opacity-45"}`}
+                >
+                  <div className="space-y-1">
+                    <p className="text-3xl font-black text-[var(--color-text)]">
+                      {set.title}
+                    </p>
+                    <p className="text-lg text-[var(--color-text-soft)]">
+                      Selesaikan / Solve
+                    </p>
+                  </div>
 
                 <div className="grid gap-5 md:grid-cols-3">
                   {[0, 1, 2].map((column) => (
@@ -397,10 +461,13 @@ export function TherapyDemoSheet({
                             rawValue !== "" &&
                             Number(rawValue) === question.expectedAnswer;
                           const isWrong = rawValue !== "" && !isCorrect;
+                          const canEditQuestion =
+                            editable && inputMode === "keyboard";
+                          const isLastQuestion = question.id === lastQuestionId;
 
                           return (
                             <div
-                              className="flex items-center gap-3 text-2xl font-black text-[var(--color-text)]"
+                              className="flex flex-wrap items-center gap-3 text-2xl font-black text-[var(--color-text)]"
                               key={question.id}
                             >
                               <span className="w-7 text-right">{question.augend}</span>
@@ -415,10 +482,14 @@ export function TherapyDemoSheet({
                                       : activeQuestionId === question.id
                                         ? "border-[var(--color-primary)]"
                                         : "border-[var(--color-border-strong)]"
-                                } ${inputMode === "pen" || !canEdit ? "pointer-events-none opacity-75" : ""}`}
+                                } ${
+                                  inputMode === "pen" || !editable
+                                    ? "pointer-events-none opacity-75"
+                                    : ""
+                                }`}
                                 inputMode="numeric"
                                 onChange={(event) => {
-                                  if (!canEdit) {
+                                  if (!canEditQuestion) {
                                     return;
                                   }
 
@@ -428,7 +499,7 @@ export function TherapyDemoSheet({
                                   onAnswerChange(question.id, sanitizedValue);
                                 }}
                                 onFocus={() => {
-                                  if (!canEdit) {
+                                  if (!editable) {
                                     return;
                                   }
 
@@ -439,7 +510,7 @@ export function TherapyDemoSheet({
                                 }}
                                 onKeyDown={(event) => handleKeyDown(event, question.id)}
                                 placeholder="?"
-                                readOnly={inputMode === "pen" || !canEdit}
+                                readOnly={!canEditQuestion}
                                 ref={(element) => {
                                   inputRefs.current[question.id] = element;
                                 }}
@@ -447,6 +518,20 @@ export function TherapyDemoSheet({
                               />
                               <span>=</span>
                               <span className="w-9">{question.result}</span>
+                              {isStudentEditor && isLastQuestion ? (
+                                <Button
+                                  className="min-h-10 px-4 text-xs"
+                                  disabled={!unlocked || submitted || isSubmitting}
+                                  onClick={() => handleSubmitSetClick(set.id)}
+                                  variant={submitted ? "secondary" : "primary"}
+                                >
+                                  {submitted
+                                    ? "Submitted"
+                                    : isSubmitting
+                                      ? "Submitting..."
+                                      : "Submit"}
+                                </Button>
+                              ) : null}
                             </div>
                           );
                         })}
@@ -479,12 +564,13 @@ export function TherapyDemoSheet({
                     <p className="text-sm text-[var(--color-text-soft)]">
                       {submitted
                         ? "Final marks are now visible to both teacher and student."
-                        : "Marks stay hidden until the student submits the full worksheet."}
+                        : "Marks stay hidden until this exercise is submitted."}
                     </p>
                   </div>
                 </div>
-              </section>
-            ))}
+                </section>
+              );
+            })}
           </div>
         </div>
 
@@ -506,16 +592,16 @@ export function TherapyDemoSheet({
         <div className="rounded-[24px] bg-[var(--color-surface-soft)] px-4 py-4 text-sm leading-6 text-[var(--color-text-soft)]">
           {!isStudentEditor
             ? "The teacher can watch live typed answers and handwriting as the student works, but the teacher cannot edit the worksheet."
-            : submitted
-            ? "The worksheet has been submitted. Reset the worksheet to try a fresh timed attempt."
+            : allSetsSubmitted
+            ? "All exercise sets have been submitted. Reset the worksheet to try a fresh timed attempt."
             : inputMode === "keyboard"
               ? "Keyboard mode is active. Type a number, press Enter to move to the next box, and use the arrow keys to jump around the worksheet."
               : "Writing pad mode is active. Use a stylus, pen tablet, touch screen, or mouse to handwrite directly on the worksheet."}
         </div>
         <div className="rounded-[24px] bg-[var(--color-surface-soft)] px-4 py-4 text-sm leading-6 text-[var(--color-text-soft)]">
-          {submitted
-            ? "This first demo now behaves like a real final submission: answers are locked, marks appear, and the timer stops for both sides."
-            : "The timer begins automatically on the student&apos;s first real answer action and stops automatically on final submission. In this first demo, auto marks are based on the typed answer boxes while the writing pad is for freehand working."}
+          {allSetsSubmitted
+            ? "All marks are now visible to both teacher and student, and the timer has stopped for both sides."
+            : "Each exercise set is submitted separately. Marks appear only for submitted sets, while the next set stays locked until the previous one is submitted."}
         </div>
       </div>
     </Card>
