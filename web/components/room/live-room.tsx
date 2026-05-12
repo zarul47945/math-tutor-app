@@ -324,16 +324,16 @@ function RoomExperience({
   const connectionState = useConnectionState();
   const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: true }]);
   const {
-    cameraTrack,
     isCameraEnabled,
     isMicrophoneEnabled,
     lastCameraError,
     lastMicrophoneError,
     localParticipant,
-    microphoneTrack,
   } = useLocalParticipant();
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [isCameraPending, setIsCameraPending] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [isMicrophonePending, setIsMicrophonePending] = useState(false);
   const [isTimerPending, setIsTimerPending] = useState(false);
   const [joinedStudents, setJoinedStudents] = useState<SessionParticipant[]>([]);
   const [sessionState, setSessionState] = useState(initialRoomState);
@@ -347,7 +347,10 @@ function RoomExperience({
   const [whiteboardStrokes, setWhiteboardStrokes] = useState<WhiteboardStroke[]>([]);
   const [timerNow, setTimerNow] = useState(0);
   const skipNextTherapyBroadcastRef = useRef(false);
+  const therapyAnswersRef = useRef<TherapyAnswerMap>({});
+  const therapyInkStrokesRef = useRef<TherapyInkStroke[]>([]);
   const therapyRevisionRef = useRef(0);
+  const therapySubmittedRef = useRef(false);
   const remoteParticipants = useMemo(
     () =>
       [...participants]
@@ -370,7 +373,7 @@ function RoomExperience({
     () => tracks.find((trackRef) => trackRef.participant.isLocal) ?? null,
     [tracks],
   );
-  const isLocalCameraActive = Boolean(cameraTrack?.videoTrack) || isCameraEnabled;
+  const isLocalCameraActive = isCameraEnabled;
   const isLocalMicrophoneActive = isMicrophoneEnabled;
 
   const displayedElapsedSeconds = useMemo(
@@ -388,6 +391,47 @@ function RoomExperience({
 
     return null;
   }, [lastCameraError, lastMicrophoneError]);
+
+  const applyLocalTherapySnapshot = ({
+    answers,
+    revision,
+    strokes,
+    submitted,
+  }: {
+    answers: TherapyAnswerMap;
+    revision: number;
+    strokes: TherapyInkStroke[];
+    submitted: boolean;
+  }) => {
+    therapyAnswersRef.current = answers;
+    therapyInkStrokesRef.current = strokes;
+    therapyRevisionRef.current = revision;
+    therapySubmittedRef.current = submitted;
+    setTherapyAnswers(answers);
+    setTherapyInkStrokes(strokes);
+    setTherapyRevision(revision);
+    setTherapySubmitted(submitted);
+  };
+
+  const createLocalTherapySnapshot = ({
+    answers = therapyAnswersRef.current,
+    strokes = therapyInkStrokesRef.current,
+    submitted = therapySubmittedRef.current,
+  }: {
+    answers?: TherapyAnswerMap;
+    strokes?: TherapyInkStroke[];
+    submitted?: boolean;
+  }) => {
+    const snapshot = {
+      answers,
+      revision: therapyRevisionRef.current + 1,
+      strokes,
+      submitted,
+    };
+
+    applyLocalTherapySnapshot(snapshot);
+    return snapshot;
+  };
 
   const { send } = useDataChannel(ROOM_SIGNAL_TOPIC, (message) => {
     const signal = decodeRoomSignal(message.payload);
@@ -410,12 +454,8 @@ function RoomExperience({
         return;
       }
 
-      therapyRevisionRef.current = signal.revision;
       skipNextTherapyBroadcastRef.current = true;
-      setTherapyAnswers(signal.answers);
-      setTherapyRevision(signal.revision);
-      setTherapyInkStrokes(signal.strokes);
-      setTherapySubmitted(signal.submitted);
+      applyLocalTherapySnapshot(signal);
       return;
     }
 
@@ -429,18 +469,18 @@ function RoomExperience({
         return currentStrokes;
       }
 
-    return [...currentStrokes, signal.stroke];
+      return [...currentStrokes, signal.stroke];
+    });
   });
-});
 
-useEffect(() => {
-  therapyRevisionRef.current = therapyRevision;
-}, [therapyRevision]);
+  useEffect(() => {
+    therapyRevisionRef.current = therapyRevision;
+  }, [therapyRevision]);
 
-useEffect(() => {
-  if (!sessionState.timer_running) {
-    return;
-  }
+  useEffect(() => {
+    if (!sessionState.timer_running) {
+      return;
+    }
 
     const intervalId = window.setInterval(() => {
       setTimerNow(Date.now());
@@ -474,48 +514,6 @@ useEffect(() => {
       room.off(RoomEvent.Reconnected, handleReconnected);
     };
   }, [room]);
-
-  useEffect(() => {
-    if (
-      connectionState !== "connected" ||
-      !isCameraEnabled ||
-      cameraTrack ||
-      roomError
-    ) {
-      return;
-    }
-
-    void localParticipant.setCameraEnabled(true).catch((cameraError) => {
-      setFeedback(getMediaErrorMessage(cameraError, "camera"));
-    });
-  }, [
-    cameraTrack,
-    connectionState,
-    isCameraEnabled,
-    localParticipant,
-    roomError,
-  ]);
-
-  useEffect(() => {
-    if (
-      connectionState !== "connected" ||
-      !isMicrophoneEnabled ||
-      microphoneTrack ||
-      roomError
-    ) {
-      return;
-    }
-
-    void localParticipant.setMicrophoneEnabled(true).catch((microphoneError) => {
-      setFeedback(getMediaErrorMessage(microphoneError, "microphone"));
-    });
-  }, [
-    connectionState,
-    isMicrophoneEnabled,
-    localParticipant,
-    microphoneTrack,
-    roomError,
-  ]);
 
   useEffect(() => {
     if (
@@ -657,6 +655,44 @@ useEffect(() => {
     }
   };
 
+  const publishTherapySnapshot = async ({
+    answers,
+    revision,
+    strokes,
+    submitted,
+  }: {
+    answers: TherapyAnswerMap;
+    revision: number;
+    strokes: TherapyInkStroke[];
+    submitted: boolean;
+  }) => {
+    if (connectionState !== "connected") {
+      return;
+    }
+
+    try {
+      await send(
+        encodeRoomSignal({
+          type: "therapy.snapshot",
+          answers,
+          revision,
+          strokes,
+          submitted,
+        }),
+        {
+          reliable: true,
+          topic: ROOM_SIGNAL_TOPIC,
+        },
+      );
+    } catch (signalError) {
+      setFeedback(
+        signalError instanceof Error
+          ? signalError.message
+          : "Unable to sync the therapy worksheet right now.",
+      );
+    }
+  };
+
   const refreshSessionRoomState = async () => {
     const refreshedState = await getActiveSessionRoomState(
       supabase,
@@ -730,6 +766,7 @@ useEffect(() => {
 
   const handleToggleMicrophone = async () => {
     setFeedback(null);
+    setIsMicrophonePending(true);
 
     try {
       ensureDeviceAccessSupport();
@@ -742,11 +779,14 @@ useEffect(() => {
       await localParticipant.setMicrophoneEnabled(false);
     } catch (microphoneError) {
       setFeedback(getMediaErrorMessage(microphoneError, "microphone"));
+    } finally {
+      setIsMicrophonePending(false);
     }
   };
 
   const handleToggleCamera = async () => {
     setFeedback(null);
+    setIsCameraPending(true);
 
     try {
       ensureDeviceAccessSupport();
@@ -759,6 +799,8 @@ useEffect(() => {
       await localParticipant.setCameraEnabled(false);
     } catch (cameraError) {
       setFeedback(getMediaErrorMessage(cameraError, "camera"));
+    } finally {
+      setIsCameraPending(false);
     }
   };
 
@@ -779,19 +821,20 @@ useEffect(() => {
   };
 
   const handleTherapyAnswerChange = (questionId: string, value: string) => {
+    const nextAnswers = {
+      ...therapyAnswersRef.current,
+      [questionId]: value,
+    };
     const shouldStartTimer =
       role === "student" &&
       !therapySubmitted &&
       !sessionState.timer_running &&
       !isTimerPending &&
-      !hasAnyTherapyAnswer(therapyAnswers) &&
+      !hasAnyTherapyAnswer(therapyAnswersRef.current) &&
       value.trim() !== "";
 
-    setTherapyAnswers((currentAnswers) => ({
-      ...currentAnswers,
-      [questionId]: value,
-    }));
-    setTherapyRevision((currentRevision) => currentRevision + 1);
+    const snapshot = createLocalTherapySnapshot({ answers: nextAnswers });
+    void publishTherapySnapshot(snapshot);
 
     if (shouldStartTimer) {
       void persistTimerState({
@@ -803,16 +846,17 @@ useEffect(() => {
   };
 
   const handleTherapyStrokeComplete = (stroke: TherapyInkStroke) => {
+    const nextStrokes = [...therapyInkStrokesRef.current, stroke];
     const shouldStartTimer =
       role === "student" &&
       !therapySubmitted &&
       !sessionState.timer_running &&
       !isTimerPending &&
-      !hasAnyTherapyAnswer(therapyAnswers) &&
-      therapyInkStrokes.length === 0;
+      !hasAnyTherapyAnswer(therapyAnswersRef.current) &&
+      therapyInkStrokesRef.current.length === 0;
 
-    setTherapyInkStrokes((currentStrokes) => [...currentStrokes, stroke]);
-    setTherapyRevision((currentRevision) => currentRevision + 1);
+    const snapshot = createLocalTherapySnapshot({ strokes: nextStrokes });
+    void publishTherapySnapshot(snapshot);
 
     if (shouldStartTimer) {
       void persistTimerState({
@@ -824,19 +868,22 @@ useEffect(() => {
   };
 
   const handleClearTherapyInk = () => {
-    setTherapyInkStrokes([]);
-    setTherapyRevision((currentRevision) => currentRevision + 1);
+    const snapshot = createLocalTherapySnapshot({ strokes: [] });
+    void publishTherapySnapshot(snapshot);
   };
 
   const resetTherapyAttemptState = () => {
-    setTherapySubmitted(false);
-    setTherapyAnswers({});
-    setTherapyInkStrokes([]);
-    setTherapyRevision((currentRevision) => currentRevision + 1);
+    return createLocalTherapySnapshot({
+      answers: {},
+      strokes: [],
+      submitted: false,
+    });
   };
 
   const handleResetTherapyWorksheet = () => {
-    resetTherapyAttemptState();
+    const snapshot = resetTherapyAttemptState();
+    void publishTherapySnapshot(snapshot);
+
     if (sessionState.elapsed_seconds !== 0 || sessionState.timer_running) {
       void persistTimerState({
         elapsed_seconds: 0,
@@ -851,8 +898,8 @@ useEffect(() => {
       return;
     }
 
-    setTherapySubmitted(true);
-    setTherapyRevision((currentRevision) => currentRevision + 1);
+    const snapshot = createLocalTherapySnapshot({ submitted: true });
+    void publishTherapySnapshot(snapshot);
 
     if (!sessionState.timer_running) {
       return;
@@ -870,7 +917,7 @@ useEffect(() => {
       return;
     }
 
-    resetTherapyAttemptState();
+    const snapshot = resetTherapyAttemptState();
 
     await persistTimerState({
       elapsed_seconds: 0,
@@ -878,13 +925,7 @@ useEffect(() => {
       timer_started_at: null,
     });
 
-    await syncRoomSignal({
-      type: "therapy.snapshot",
-      answers: {},
-      revision: therapyRevisionRef.current,
-      strokes: [],
-      submitted: false,
-    });
+    await publishTherapySnapshot(snapshot);
   };
 
   return (
@@ -939,7 +980,9 @@ useEffect(() => {
 
           <RoomControls
             cameraEnabled={isLocalCameraActive}
-            isBusy={isLeaving || isTimerPending}
+            isBusy={
+              isLeaving || isTimerPending || isCameraPending || isMicrophonePending
+            }
             microphoneEnabled={isLocalMicrophoneActive}
             onLeave={handleLeave}
             onToggleCamera={handleToggleCamera}
