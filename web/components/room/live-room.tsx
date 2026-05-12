@@ -338,6 +338,7 @@ function RoomExperience({
   const [joinedStudents, setJoinedStudents] = useState<SessionParticipant[]>([]);
   const [sessionState, setSessionState] = useState(initialRoomState);
   const [therapyAnswers, setTherapyAnswers] = useState<TherapyAnswerMap>({});
+  const [therapyRevision, setTherapyRevision] = useState(0);
   const [therapySubmitted, setTherapySubmitted] = useState(false);
   const [therapyInkStrokes, setTherapyInkStrokes] = useState<TherapyInkStroke[]>(
     [],
@@ -346,6 +347,7 @@ function RoomExperience({
   const [whiteboardStrokes, setWhiteboardStrokes] = useState<WhiteboardStroke[]>([]);
   const [timerNow, setTimerNow] = useState(0);
   const skipNextTherapyBroadcastRef = useRef(false);
+  const therapyRevisionRef = useRef(0);
   const remoteParticipants = useMemo(
     () =>
       [...participants]
@@ -404,8 +406,14 @@ function RoomExperience({
     }
 
     if (signal.type === "therapy.snapshot") {
+      if (signal.revision <= therapyRevisionRef.current) {
+        return;
+      }
+
+      therapyRevisionRef.current = signal.revision;
       skipNextTherapyBroadcastRef.current = true;
       setTherapyAnswers(signal.answers);
+      setTherapyRevision(signal.revision);
       setTherapyInkStrokes(signal.strokes);
       setTherapySubmitted(signal.submitted);
       return;
@@ -421,14 +429,18 @@ function RoomExperience({
         return currentStrokes;
       }
 
-      return [...currentStrokes, signal.stroke];
-    });
+    return [...currentStrokes, signal.stroke];
   });
+});
 
-  useEffect(() => {
-    if (!sessionState.timer_running) {
-      return;
-    }
+useEffect(() => {
+  therapyRevisionRef.current = therapyRevision;
+}, [therapyRevision]);
+
+useEffect(() => {
+  if (!sessionState.timer_running) {
+    return;
+  }
 
     const intervalId = window.setInterval(() => {
       setTimerNow(Date.now());
@@ -524,6 +536,7 @@ function RoomExperience({
         encodeRoomSignal({
           type: "therapy.snapshot",
           answers: therapyAnswers,
+          revision: therapyRevision,
           strokes: therapyInkStrokes,
           submitted: therapySubmitted,
         }),
@@ -548,6 +561,7 @@ function RoomExperience({
     send,
     therapyAnswers,
     therapyInkStrokes,
+    therapyRevision,
     therapySubmitted,
   ]);
 
@@ -777,6 +791,7 @@ function RoomExperience({
       ...currentAnswers,
       [questionId]: value,
     }));
+    setTherapyRevision((currentRevision) => currentRevision + 1);
 
     if (shouldStartTimer) {
       void persistTimerState({
@@ -797,6 +812,7 @@ function RoomExperience({
       therapyInkStrokes.length === 0;
 
     setTherapyInkStrokes((currentStrokes) => [...currentStrokes, stroke]);
+    setTherapyRevision((currentRevision) => currentRevision + 1);
 
     if (shouldStartTimer) {
       void persistTimerState({
@@ -809,12 +825,14 @@ function RoomExperience({
 
   const handleClearTherapyInk = () => {
     setTherapyInkStrokes([]);
+    setTherapyRevision((currentRevision) => currentRevision + 1);
   };
 
   const resetTherapyAttemptState = () => {
     setTherapySubmitted(false);
     setTherapyAnswers({});
     setTherapyInkStrokes([]);
+    setTherapyRevision((currentRevision) => currentRevision + 1);
   };
 
   const handleResetTherapyWorksheet = () => {
@@ -834,6 +852,7 @@ function RoomExperience({
     }
 
     setTherapySubmitted(true);
+    setTherapyRevision((currentRevision) => currentRevision + 1);
 
     if (!sessionState.timer_running) {
       return;
@@ -862,6 +881,7 @@ function RoomExperience({
     await syncRoomSignal({
       type: "therapy.snapshot",
       answers: {},
+      revision: therapyRevisionRef.current,
       strokes: [],
       submitted: false,
     });

@@ -32,6 +32,7 @@ export type RoomSignal =
   | {
       type: "therapy.snapshot";
       answers: TherapyAnswerMap;
+      revision: number;
       strokes: TherapyInkStroke[];
       submitted: boolean;
     }
