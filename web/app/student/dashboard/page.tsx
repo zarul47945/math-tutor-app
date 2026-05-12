@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { LogoutButton } from "@/components/logout-button";
 import { StudentAssignedSessionCard } from "@/components/student-assigned-session-card";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +29,12 @@ export default async function StudentDashboardPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/password/change"
+                className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-[var(--color-border)] px-6 text-sm font-semibold text-[var(--color-text)] transition hover:bg-[var(--color-surface-soft)]"
+              >
+                Change password
+              </Link>
               <LogoutButton />
             </div>
           </Card>

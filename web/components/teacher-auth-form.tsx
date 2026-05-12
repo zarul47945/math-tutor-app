@@ -77,6 +77,15 @@ export function TeacherAuthForm() {
             placeholder="Enter password"
           />
         </Field>
+
+        <div className="flex justify-end">
+          <Link
+            href="/password/forgot"
+            className="text-sm font-semibold text-[var(--color-primary)] transition hover:text-[var(--color-primary-strong)]"
+          >
+            Forgot password?
+          </Link>
+        </div>
       </div>
 
       {feedback ? (

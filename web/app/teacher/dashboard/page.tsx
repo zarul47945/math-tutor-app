@@ -44,6 +44,12 @@ export default async function TeacherDashboardPage() {
               >
                 Create session
               </Link>
+              <Link
+                href="/password/change"
+                className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-[var(--color-border)] px-6 text-sm font-semibold text-[var(--color-text)] transition hover:bg-[var(--color-surface-soft)]"
+              >
+                Change password
+              </Link>
               <LogoutButton />
             </div>
           </Card>
