@@ -506,7 +506,11 @@ function RoomExperience({
   ]);
 
   useEffect(() => {
-    if (connectionState !== "connected" || participants.length < 2) {
+    if (
+      role !== "student" ||
+      connectionState !== "connected" ||
+      participants.length < 2
+    ) {
       return;
     }
 
@@ -540,6 +544,7 @@ function RoomExperience({
   }, [
     connectionState,
     participants.length,
+    role,
     send,
     therapyAnswers,
     therapyInkStrokes,
@@ -852,6 +857,13 @@ function RoomExperience({
       elapsed_seconds: 0,
       timer_running: false,
       timer_started_at: null,
+    });
+
+    await syncRoomSignal({
+      type: "therapy.snapshot",
+      answers: {},
+      strokes: [],
+      submitted: false,
     });
   };
 
