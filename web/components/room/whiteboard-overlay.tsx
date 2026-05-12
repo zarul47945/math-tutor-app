@@ -166,10 +166,12 @@ function WhiteboardCameraTile({
 
 export function WhiteboardOverlay({
   cameraParticipants,
+  canUndo,
   enabled,
   onClear,
   onClose,
   onStrokeComplete,
+  onUndo,
   role,
   strokes,
 }: {
@@ -177,10 +179,12 @@ export function WhiteboardOverlay({
     participant: Participant;
     trackRef: TrackReferenceOrPlaceholder | null;
   }>;
+  canUndo: boolean;
   enabled: boolean;
   onClear: () => void;
   onClose: () => void;
   onStrokeComplete: (stroke: WhiteboardStroke) => void;
+  onUndo: () => void;
   role: LiveKitRole;
   strokes: WhiteboardStroke[];
 }) {
@@ -344,10 +348,10 @@ export function WhiteboardOverlay({
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-[var(--color-bg)]">
-      <div className="flex h-full flex-col">
-        <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4 shadow-[var(--shadow-card)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="fixed inset-0 z-40 overflow-hidden bg-[var(--color-bg)]">
+      <div className="flex h-dvh flex-col overflow-hidden">
+        <header className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3 shadow-[var(--shadow-card)] lg:px-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="rounded-full bg-[var(--color-primary-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-primary-strong)]">
@@ -357,17 +361,22 @@ export function WhiteboardOverlay({
                   {role}
                 </div>
               </div>
-              <h2 className="text-3xl font-bold tracking-tight text-[var(--color-text)]">
+              <h2 className="text-2xl font-bold tracking-tight text-[var(--color-text)] lg:text-3xl">
                 Live teaching board
               </h2>
             </div>
 
             <div className="flex flex-wrap gap-3">
-              {role === "teacher" ? (
-                <Button onClick={onClear} variant="danger">
-                  Clear board
-                </Button>
-              ) : null}
+              <Button disabled={!canUndo} onClick={onUndo} variant="secondary">
+                Undo
+              </Button>
+              <Button
+                disabled={strokes.length === 0}
+                onClick={onClear}
+                variant="danger"
+              >
+                Clear whiteboard
+              </Button>
               <Button onClick={onClose} variant="secondary">
                 Close whiteboard
               </Button>
@@ -375,8 +384,8 @@ export function WhiteboardOverlay({
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="border-r border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-5">
+        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden lg:grid-cols-[260px_minmax(0,1fr)] lg:grid-rows-1">
+          <aside className="max-h-[34dvh] overflow-y-auto border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 lg:max-h-none lg:border-b-0 lg:border-r">
             <div className="space-y-6">
               <section className="space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-text-soft)]">
@@ -473,9 +482,9 @@ export function WhiteboardOverlay({
             </div>
           </aside>
 
-          <section className="min-h-0 bg-[var(--color-surface-strong)] p-6">
+          <section className="min-h-0 overflow-hidden bg-[var(--color-surface-strong)] p-3 lg:p-5">
             <div
-              className="relative h-full min-h-[420px] overflow-hidden rounded-[24px] border border-[var(--color-border)] bg-white shadow-[var(--shadow-card)]"
+              className="relative h-full min-h-0 overflow-hidden rounded-[24px] border border-[var(--color-border)] bg-white shadow-[var(--shadow-card)]"
               ref={wrapperRef}
               style={{
                 backgroundImage:
@@ -485,15 +494,15 @@ export function WhiteboardOverlay({
             >
               {isCameraDockHidden ? (
                 <button
-                  className="absolute right-4 top-4 z-20 rounded-full border border-[var(--color-border)] bg-white/95 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-text)] shadow-[var(--shadow-card)] backdrop-blur"
+                  className="absolute right-3 top-3 z-20 rounded-full border border-[var(--color-border)] bg-white/95 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-text)] shadow-[var(--shadow-card)] backdrop-blur"
                   onClick={() => setIsCameraDockHidden(false)}
                   type="button"
                 >
                   Show cameras
                 </button>
               ) : (
-                <div className="absolute right-4 top-4 z-20 w-[250px] max-w-[calc(100%-2rem)] overflow-hidden rounded-[24px] border border-[var(--color-border)] bg-white/96 shadow-[var(--shadow-card)] backdrop-blur">
-                  <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
+                <div className="absolute right-3 top-3 z-20 w-[220px] max-w-[calc(100%-1.5rem)] overflow-hidden rounded-[20px] border border-[var(--color-border)] bg-white/96 shadow-[var(--shadow-card)] backdrop-blur lg:w-[240px]">
+                  <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-2.5">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-[var(--color-text)]">
                         Classroom cameras
@@ -523,7 +532,7 @@ export function WhiteboardOverlay({
                   </div>
 
                   {!isCameraDockMinimized ? (
-                    <div className="space-y-3 p-3">
+                    <div className="max-h-[calc(100dvh-15rem)] space-y-2 overflow-y-auto p-2.5">
                       {cameraParticipants.length > 0 ? (
                         cameraParticipants.map(({ participant, trackRef }) => (
                           <WhiteboardCameraTile

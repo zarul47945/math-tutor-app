@@ -493,6 +493,13 @@ function RoomExperience({
       return;
     }
 
+    if (signal.type === "whiteboard.undo") {
+      setWhiteboardStrokes((currentStrokes) =>
+        currentStrokes.filter((stroke) => stroke.id !== signal.strokeId),
+      );
+      return;
+    }
+
     setWhiteboardStrokes((currentStrokes) => {
       if (currentStrokes.some((stroke) => stroke.id === signal.stroke.id)) {
         return currentStrokes;
@@ -849,6 +856,25 @@ function RoomExperience({
     });
   };
 
+  const handleUndoWhiteboard = () => {
+    const lastOwnStroke = [...whiteboardStrokes]
+      .reverse()
+      .find((stroke) => stroke.author === role);
+
+    if (!lastOwnStroke) {
+      return;
+    }
+
+    setWhiteboardStrokes((currentStrokes) =>
+      currentStrokes.filter((stroke) => stroke.id !== lastOwnStroke.id),
+    );
+    void syncRoomSignal({
+      by: role,
+      strokeId: lastOwnStroke.id,
+      type: "whiteboard.undo",
+    });
+  };
+
   const handleTherapyAnswerChange = (questionId: string, value: string) => {
     const nextAnswers = {
       ...therapyAnswersRef.current,
@@ -1065,10 +1091,12 @@ function RoomExperience({
         {whiteboardEnabled ? (
           <WhiteboardOverlay
             cameraParticipants={whiteboardCameraParticipants}
+            canUndo={whiteboardStrokes.some((stroke) => stroke.author === role)}
             enabled={whiteboardEnabled}
             onClear={handleClearWhiteboard}
             onClose={() => setWhiteboardEnabled(false)}
             onStrokeComplete={handleStrokeComplete}
+            onUndo={handleUndoWhiteboard}
             role={role}
             strokes={whiteboardStrokes}
           />

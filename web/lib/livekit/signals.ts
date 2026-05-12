@@ -47,6 +47,11 @@ export type RoomSignal =
   | {
       type: "whiteboard.clear";
       by: string;
+    }
+  | {
+      type: "whiteboard.undo";
+      by: string;
+      strokeId: string;
     };
 
 const encoder = new TextEncoder();
