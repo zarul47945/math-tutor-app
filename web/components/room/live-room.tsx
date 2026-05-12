@@ -384,6 +384,24 @@ function RoomExperience({
     () => tracks.find((trackRef) => trackRef.participant.isLocal) ?? null,
     [tracks],
   );
+  const whiteboardCameraParticipants = useMemo(
+    () => [
+      {
+        participant: localParticipant,
+        trackRef: localCameraTrackRef,
+      },
+      ...remoteParticipants.map((participant) => ({
+        participant,
+        trackRef: remoteCameraTrackByIdentity.get(participant.identity) ?? null,
+      })),
+    ],
+    [
+      localCameraTrackRef,
+      localParticipant,
+      remoteCameraTrackByIdentity,
+      remoteParticipants,
+    ],
+  );
   const isLocalCameraActive = isCameraEnabled;
   const isLocalMicrophoneActive = isMicrophoneEnabled;
 
@@ -1044,14 +1062,17 @@ function RoomExperience({
           </div>
         </div>
 
-        <WhiteboardOverlay
-          enabled={whiteboardEnabled}
-          onClear={handleClearWhiteboard}
-          onClose={() => setWhiteboardEnabled(false)}
-          onStrokeComplete={handleStrokeComplete}
-          role={role}
-          strokes={whiteboardStrokes}
-        />
+        {whiteboardEnabled ? (
+          <WhiteboardOverlay
+            cameraParticipants={whiteboardCameraParticipants}
+            enabled={whiteboardEnabled}
+            onClear={handleClearWhiteboard}
+            onClose={() => setWhiteboardEnabled(false)}
+            onStrokeComplete={handleStrokeComplete}
+            role={role}
+            strokes={whiteboardStrokes}
+          />
+        ) : null}
 
         <TherapyDemoSheet
           answers={therapyAnswers}
@@ -1098,7 +1119,7 @@ function RoomExperience({
               <span className="font-semibold text-[var(--color-text)]">
                 Whiteboard:
               </span>{" "}
-              Shared live overlay
+              Dedicated classroom workspace
             </p>
             <p>
               <span className="font-semibold text-[var(--color-text)]">

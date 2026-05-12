@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  type TrackReference,
+  type TrackReferenceOrPlaceholder,
+  VideoTrack,
+} from "@livekit/components-react";
+import type { Participant } from "livekit-client";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -106,7 +112,60 @@ function toolLabel(tool: WhiteboardTool) {
   }
 }
 
+function participantLabel(participant: Participant) {
+  const name = participant.name?.trim();
+  return name && name.length > 0 ? name : participant.identity;
+}
+
+function isTrackReference(
+  trackRef: TrackReferenceOrPlaceholder | null,
+): trackRef is TrackReference {
+  return trackRef !== null && trackRef.publication !== undefined;
+}
+
+function WhiteboardCameraTile({
+  participant,
+  trackRef,
+}: {
+  participant: Participant;
+  trackRef: TrackReferenceOrPlaceholder | null;
+}) {
+  const label = participantLabel(participant);
+  const resolvedTrackRef = isTrackReference(trackRef) ? trackRef : null;
+
+  return (
+    <div className="overflow-hidden rounded-[20px] border border-[var(--color-border)] bg-[var(--color-surface-strong)]">
+      <div className="relative aspect-[4/3] bg-[#0f172a]">
+        {resolvedTrackRef ? (
+          <VideoTrack
+            className="absolute inset-0 h-full w-full object-cover"
+            trackRef={resolvedTrackRef}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0f172a]">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10 text-2xl font-semibold text-white">
+              {label.charAt(0).toUpperCase()}
+            </div>
+          </div>
+        )}
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-3 py-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">{label}</p>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-white/70">
+              {participant.isLocal ? "You" : "Remote"}
+            </p>
+          </div>
+          <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
+            {participant.isCameraEnabled ? "Cam on" : "Cam off"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function WhiteboardOverlay({
+  cameraParticipants,
   enabled,
   onClear,
   onClose,
@@ -114,6 +173,10 @@ export function WhiteboardOverlay({
   role,
   strokes,
 }: {
+  cameraParticipants: Array<{
+    participant: Participant;
+    trackRef: TrackReferenceOrPlaceholder | null;
+  }>;
   enabled: boolean;
   onClear: () => void;
   onClose: () => void;
@@ -129,6 +192,8 @@ export function WhiteboardOverlay({
   const [selectedColor, setSelectedColor] = useState(
     role === "teacher" ? TEACHER_STROKE : STUDENT_STROKE,
   );
+  const [isCameraDockHidden, setIsCameraDockHidden] = useState(false);
+  const [isCameraDockMinimized, setIsCameraDockMinimized] = useState(false);
   const [selectedSize, setSelectedSize] = useState(4);
   const [selectedTool, setSelectedTool] = useState<WhiteboardTool>("pen");
   const strokeColor = useMemo(
@@ -418,6 +483,64 @@ export function WhiteboardOverlay({
                 backgroundSize: "40px 40px",
               }}
             >
+              {isCameraDockHidden ? (
+                <button
+                  className="absolute right-4 top-4 z-20 rounded-full border border-[var(--color-border)] bg-white/95 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-text)] shadow-[var(--shadow-card)] backdrop-blur"
+                  onClick={() => setIsCameraDockHidden(false)}
+                  type="button"
+                >
+                  Show cameras
+                </button>
+              ) : (
+                <div className="absolute right-4 top-4 z-20 w-[250px] max-w-[calc(100%-2rem)] overflow-hidden rounded-[24px] border border-[var(--color-border)] bg-white/96 shadow-[var(--shadow-card)] backdrop-blur">
+                  <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[var(--color-text)]">
+                        Classroom cameras
+                      </p>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--color-text-soft)]">
+                        Teacher and student
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="inline-flex h-8 min-w-8 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-soft)] px-2 text-xs font-semibold text-[var(--color-text)] transition hover:bg-[var(--color-primary-soft)] hover:text-[var(--color-primary-strong)]"
+                        onClick={() =>
+                          setIsCameraDockMinimized((currentValue) => !currentValue)
+                        }
+                        type="button"
+                      >
+                        {isCameraDockMinimized ? "Open" : "Min"}
+                      </button>
+                      <button
+                        className="inline-flex h-8 min-w-8 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-soft)] px-2 text-xs font-semibold text-[var(--color-text)] transition hover:bg-[var(--color-primary-soft)] hover:text-[var(--color-primary-strong)]"
+                        onClick={() => setIsCameraDockHidden(true)}
+                        type="button"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+
+                  {!isCameraDockMinimized ? (
+                    <div className="space-y-3 p-3">
+                      {cameraParticipants.length > 0 ? (
+                        cameraParticipants.map(({ participant, trackRef }) => (
+                          <WhiteboardCameraTile
+                            key={participant.identity}
+                            participant={participant}
+                            trackRef={trackRef}
+                          />
+                        ))
+                      ) : (
+                        <div className="rounded-[18px] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-soft)] px-4 py-6 text-center text-sm leading-6 text-[var(--color-text-soft)]">
+                          No cameras are available in this lesson yet.
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              )}
               <canvas
                 className="absolute inset-0 h-full w-full cursor-crosshair"
                 onPointerDown={handlePointerDown}
