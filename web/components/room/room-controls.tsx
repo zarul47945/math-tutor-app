@@ -50,7 +50,7 @@ export function RoomControls({
         onClick={onToggleWhiteboard}
         variant={whiteboardEnabled ? "primary" : "secondary"}
       >
-        {whiteboardEnabled ? "Hide whiteboard" : "Show whiteboard"}
+        {whiteboardEnabled ? "Whiteboard open" : "Open whiteboard"}
       </Button>
       {onToggleTimer ? (
         <Button

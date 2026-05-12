@@ -1017,7 +1017,7 @@ function RoomExperience({
           ) : null}
         </Card>
 
-        <div className="relative overflow-hidden rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-4 shadow-[var(--shadow-card)]">
+        <div className="overflow-hidden rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-4 shadow-[var(--shadow-card)]">
           <div className="grid gap-4 lg:grid-cols-2">
             <RoomVideoTile
               participant={localParticipant}
@@ -1042,16 +1042,16 @@ function RoomExperience({
               </div>
             )}
           </div>
-          {whiteboardEnabled ? (
-            <WhiteboardOverlay
-              enabled={whiteboardEnabled}
-              onClear={handleClearWhiteboard}
-              onStrokeComplete={handleStrokeComplete}
-              role={role}
-              strokes={whiteboardStrokes}
-            />
-          ) : null}
         </div>
+
+        <WhiteboardOverlay
+          enabled={whiteboardEnabled}
+          onClear={handleClearWhiteboard}
+          onClose={() => setWhiteboardEnabled(false)}
+          onStrokeComplete={handleStrokeComplete}
+          role={role}
+          strokes={whiteboardStrokes}
+        />
 
         <TherapyDemoSheet
           answers={therapyAnswers}

@@ -12,12 +12,15 @@ export type WhiteboardPoint = {
   y: number;
 };
 
+export type WhiteboardTool = "ellipse" | "eraser" | "line" | "pen" | "rectangle";
+
 export type WhiteboardStroke = {
   id: string;
   author: string;
   color: string;
   size: number;
   points: WhiteboardPoint[];
+  tool: WhiteboardTool;
 };
 
 export type TimerSignalState = Pick<
