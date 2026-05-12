@@ -12,7 +12,7 @@ import {
   useTracks,
 } from "@livekit/components-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { Track } from "livekit-client";
+import { RoomEvent, Track } from "livekit-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -324,8 +324,15 @@ function RoomExperience({
   const participants = useParticipants();
   const connectionState = useConnectionState();
   const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: true }]);
-  const { cameraTrack, isCameraEnabled, isMicrophoneEnabled, localParticipant } =
-    useLocalParticipant();
+  const {
+    cameraTrack,
+    isCameraEnabled,
+    isMicrophoneEnabled,
+    lastCameraError,
+    lastMicrophoneError,
+    localParticipant,
+    microphoneTrack,
+  } = useLocalParticipant();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState(false);
   const [isTimerPending, setIsTimerPending] = useState(false);
@@ -368,6 +375,17 @@ function RoomExperience({
     () => calculateDisplayedSeconds(sessionState, timerNow),
     [sessionState, timerNow],
   );
+  const mediaFeedback = useMemo(() => {
+    if (lastCameraError) {
+      return getMediaErrorMessage(lastCameraError, "camera");
+    }
+
+    if (lastMicrophoneError) {
+      return getMediaErrorMessage(lastMicrophoneError, "microphone");
+    }
+
+    return null;
+  }, [lastCameraError, lastMicrophoneError]);
 
   const { send } = useDataChannel(ROOM_SIGNAL_TOPIC, (message) => {
     const signal = decodeRoomSignal(message.payload);
@@ -418,6 +436,74 @@ function RoomExperience({
 
     return () => window.clearInterval(intervalId);
   }, [sessionState.timer_running]);
+
+  useEffect(() => {
+    const handleDisconnected = (reason?: unknown) => {
+      setFeedback(
+        `The lesson room disconnected${reason !== undefined ? ` (${String(reason)})` : ""}. Refresh the page if it does not reconnect automatically.`,
+      );
+    };
+
+    const handleReconnecting = () => {
+      setFeedback("The lesson room connection dropped and is reconnecting.");
+    };
+
+    const handleReconnected = () => {
+      setFeedback(null);
+    };
+
+    room.on(RoomEvent.Disconnected, handleDisconnected);
+    room.on(RoomEvent.Reconnecting, handleReconnecting);
+    room.on(RoomEvent.Reconnected, handleReconnected);
+
+    return () => {
+      room.off(RoomEvent.Disconnected, handleDisconnected);
+      room.off(RoomEvent.Reconnecting, handleReconnecting);
+      room.off(RoomEvent.Reconnected, handleReconnected);
+    };
+  }, [room]);
+
+  useEffect(() => {
+    if (
+      connectionState !== "connected" ||
+      !isCameraEnabled ||
+      cameraTrack ||
+      roomError
+    ) {
+      return;
+    }
+
+    void localParticipant.setCameraEnabled(true).catch((cameraError) => {
+      setFeedback(getMediaErrorMessage(cameraError, "camera"));
+    });
+  }, [
+    cameraTrack,
+    connectionState,
+    isCameraEnabled,
+    localParticipant,
+    roomError,
+  ]);
+
+  useEffect(() => {
+    if (
+      connectionState !== "connected" ||
+      !isMicrophoneEnabled ||
+      microphoneTrack ||
+      roomError
+    ) {
+      return;
+    }
+
+    void localParticipant.setMicrophoneEnabled(true).catch((microphoneError) => {
+      setFeedback(getMediaErrorMessage(microphoneError, "microphone"));
+    });
+  }, [
+    connectionState,
+    isMicrophoneEnabled,
+    localParticipant,
+    microphoneTrack,
+    roomError,
+  ]);
 
   useEffect(() => {
     if (connectionState !== "connected" || participants.length < 2) {
@@ -831,9 +917,9 @@ function RoomExperience({
             whiteboardEnabled={whiteboardEnabled}
           />
 
-          {roomError ?? feedback ? (
+          {roomError ?? feedback ?? mediaFeedback ? (
             <div className="rounded-2xl bg-[var(--color-surface-soft)] px-4 py-3 text-sm text-[var(--color-text-soft)]">
-              {roomError ?? feedback}
+              {roomError ?? feedback ?? mediaFeedback}
             </div>
           ) : null}
         </Card>
