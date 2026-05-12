@@ -18,7 +18,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { RoomControls } from "@/components/room/room-controls";
-import { LocalVideoPreview } from "@/components/room/local-video-preview";
 import { RoomVideoTile } from "@/components/room/room-video-tile";
 import { TherapyDemoSheet } from "@/components/room/therapy-demo-sheet";
 import { WhiteboardOverlay } from "@/components/room/whiteboard-overlay";
@@ -365,10 +364,11 @@ function RoomExperience({
       ),
     [tracks],
   );
-  const localParticipantLabel =
-    localParticipant.name?.trim() || localParticipant.identity || "You";
-  const effectiveLocalVideoTrack = cameraTrack?.videoTrack ?? null;
-  const isLocalCameraActive = Boolean(effectiveLocalVideoTrack) || isCameraEnabled;
+  const localCameraTrackRef = useMemo(
+    () => tracks.find((trackRef) => trackRef.participant.isLocal) ?? null,
+    [tracks],
+  );
+  const isLocalCameraActive = Boolean(cameraTrack?.videoTrack) || isCameraEnabled;
   const isLocalMicrophoneActive = isMicrophoneEnabled;
 
   const displayedElapsedSeconds = useMemo(
@@ -926,11 +926,10 @@ function RoomExperience({
 
         <div className="relative overflow-hidden rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-4 shadow-[var(--shadow-card)]">
           <div className="grid gap-4 lg:grid-cols-2">
-            <LocalVideoPreview
-              cameraEnabled={isLocalCameraActive}
-              microphoneEnabled={isLocalMicrophoneActive}
-              participantLabel={localParticipantLabel}
-              track={effectiveLocalVideoTrack}
+            <RoomVideoTile
+              participant={localParticipant}
+              priority
+              trackRef={localCameraTrackRef}
             />
             {remoteParticipants.length > 0 ? (
               remoteParticipants.map((participant, index) => (
