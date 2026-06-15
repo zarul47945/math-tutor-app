@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowLeft, GraduationCap, LogIn } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -43,14 +44,24 @@ export function TeacherAuthForm() {
   };
 
   return (
-    <Card className="w-full max-w-xl p-8">
+    <Card className="w-full max-w-lg p-5 sm:p-8">
+      <Link
+        href="/"
+        className="mb-8 inline-flex text-sm font-semibold text-[var(--color-primary)] lg:hidden"
+      >
+        <ArrowLeft className="mr-2" size={16} />
+        Back to Math Tutor
+      </Link>
       <div className="space-y-3">
-        <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text)]">
-          Staff login
+        <p className="text-sm font-semibold uppercase text-[var(--color-primary)]">
+          Teacher and admin
+        </p>
+        <h1 className="text-3xl font-bold text-[var(--color-text)]">
+          Welcome back
         </h1>
         <p className="text-sm leading-6 text-[var(--color-text-soft)]">
-          Teachers and admins sign in here to manage lessons, sessions, and live
-          room supervision. New accounts will be created by an admin only.
+          Sign in to manage students, prepare lessons, or oversee the tutoring
+          service.
         </p>
       </div>
 
@@ -67,7 +78,7 @@ export function TeacherAuthForm() {
 
         <Field
           label="Password"
-          hint="Use a strong password for your tutoring account."
+          hint="Enter the password for your account."
         >
           <Input
             type="password"
@@ -89,20 +100,22 @@ export function TeacherAuthForm() {
       </div>
 
       {feedback ? (
-        <div className="mt-5 rounded-2xl bg-[var(--color-surface-soft)] px-4 py-3 text-sm text-[var(--color-text-soft)]">
+        <div className="mt-5 rounded-xl bg-[var(--color-surface-soft)] px-4 py-3 text-sm text-[var(--color-text-soft)]">
           {feedback}
         </div>
       ) : null}
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         <Button onClick={handleSubmit} disabled={isPending} className="flex-1">
+          <LogIn className="mr-2" size={18} />
           {isPending ? "Logging in..." : "Login"}
         </Button>
         <Link
           href="/student/login"
           className="inline-flex min-h-11 flex-1 items-center justify-center rounded-2xl border border-[var(--color-border)] px-5 text-sm font-semibold text-[var(--color-text-soft)] transition hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-text)]"
         >
-          Student login
+          <GraduationCap className="mr-2" size={18} />
+          I am a student
         </Link>
       </div>
     </Card>

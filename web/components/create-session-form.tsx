@@ -30,7 +30,7 @@ export function CreateSessionForm({
       setFeedback(null);
 
       if (!title.trim()) {
-        setFeedback("Please enter a session title.");
+        setFeedback("Please enter a lesson title.");
         return;
       }
 
@@ -53,21 +53,21 @@ export function CreateSessionForm({
         setFeedback(
           error instanceof Error
             ? error.message
-            : "Unable to create the session right now.",
+            : "Unable to create the lesson right now.",
         );
       }
     });
   };
 
   return (
-    <Card className="max-w-3xl p-8">
+    <Card className="max-w-3xl p-5 sm:p-8">
       <div className="space-y-3">
         <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text)]">
-          Create a session
+          Create a lesson
         </h1>
         <p className="text-sm leading-6 text-[var(--color-text-soft)]">
-          Generate a private lesson for the selected student. This first build
-          opens with the therapy worksheet demo inside the live lesson room.
+          Prepare a private lesson for one student. The student will see it
+          automatically on their dashboard.
         </p>
       </div>
 
@@ -75,7 +75,7 @@ export function CreateSessionForm({
         <div className="mt-8 space-y-5">
           <Field label="Student">
             <select
-              className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-white px-4 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary-soft)]"
+              className="h-12 w-full rounded-xl border border-[var(--color-border)] bg-white px-4 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary-soft)]"
               onChange={(event) => setStudentId(event.target.value)}
               value={studentId}
             >
@@ -89,13 +89,13 @@ export function CreateSessionForm({
         </div>
       ) : (
         <div className="mt-8 rounded-2xl bg-[var(--color-surface-soft)] px-4 py-3 text-sm text-[var(--color-text-soft)]">
-          No students are assigned to you yet. Ask an admin to link a student
-          account before creating a lesson.
+          No students are assigned to you yet. Ask an administrator to add a
+          student to your teaching list first.
         </div>
       )}
 
       <div className="mt-8 space-y-5">
-        <Field label="Session title" hint="Example: Algebra Revision - April 27">
+        <Field label="Lesson title" hint="Example: Algebra Revision - April 27">
           <Input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
@@ -110,7 +110,7 @@ export function CreateSessionForm({
           disabled={isPending || assignedStudents.length === 0}
           className="sm:w-auto"
         >
-          {isPending ? "Creating session..." : "Create session"}
+          {isPending ? "Creating lesson..." : "Create lesson"}
         </Button>
         <Link
           href="/teacher/dashboard"
@@ -137,8 +137,8 @@ export function CreateSessionForm({
         </p>
         <p className="mt-3 text-sm leading-6 text-[var(--color-text-soft)]">
           {createdSession
-            ? "Saved to Supabase and ready for the assigned student to join."
-            : "Room codes stay internal now, while the student joins straight from their dashboard and sees the therapy demo worksheet in the room."}
+            ? "The lesson is ready for the assigned student to join."
+            : "Students join directly from their dashboard, so there is no code for them to enter."}
         </p>
       </div>
 
@@ -147,9 +147,6 @@ export function CreateSessionForm({
           <p className="text-lg font-semibold text-[var(--color-text)]">
             {createdSession.title}
           </p>
-          <p className="text-sm text-[var(--color-text-soft)]">
-            Internal room code: {createdSession.join_code}
-          </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
               href={`/room/${createdSession.id}?role=teacher&joinCode=${encodeURIComponent(
@@ -157,13 +154,13 @@ export function CreateSessionForm({
               )}&sessionTitle=${encodeURIComponent(createdSession.title)}`}
               className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-[var(--color-primary)] px-5 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-strong)]"
             >
-              Enter video room
+              Enter classroom
             </Link>
             <Link
               href="/teacher/dashboard"
               className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-[var(--color-border)] px-5 text-sm font-semibold text-[var(--color-text-soft)] transition hover:bg-white hover:text-[var(--color-text)]"
             >
-              See all active sessions
+              View all lessons
             </Link>
           </div>
         </div>

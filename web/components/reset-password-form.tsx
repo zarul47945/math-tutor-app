@@ -120,7 +120,7 @@ export function ResetPasswordForm() {
   };
 
   return (
-    <Card className="w-full max-w-xl p-8">
+    <Card className="w-full max-w-xl p-5 sm:p-8">
       <div className="space-y-3">
         <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text)]">
           Set new password

@@ -45,13 +45,13 @@ export function ForgotPasswordForm() {
 
       setIsSent(true);
       setFeedback(
-        "Recovery email sent. Open the newest email from Supabase and continue from that link.",
+        "Recovery email sent. Open the newest message and follow the link to choose a new password.",
       );
     });
   };
 
   return (
-    <Card className="w-full max-w-xl p-8">
+    <Card className="w-full max-w-xl p-5 sm:p-8">
       <div className="space-y-3">
         <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text)]">
           Reset password
@@ -100,8 +100,8 @@ export function ForgotPasswordForm() {
 
       {isSent ? (
         <p className="mt-5 text-xs leading-6 text-[var(--color-text-soft)]">
-          If the email does not arrive, check spam first, then wait a minute
-          before trying again because Supabase applies email rate limits.
+          If the email does not arrive, check your spam folder and wait a
+          minute before trying again.
         </p>
       ) : null}
     </Card>

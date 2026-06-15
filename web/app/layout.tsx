@@ -15,8 +15,12 @@ const monoFont = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Math Tutor Web",
-  description: "Laptop-first online math tutoring platform built with Next.js, Supabase, and LiveKit.",
+  title: {
+    default: "Math Tutor",
+    template: "%s | Math Tutor",
+  },
+  description:
+    "Personal online mathematics lessons with live teaching, shared working, and guided practice on any device.",
 };
 
 export default function RootLayout({

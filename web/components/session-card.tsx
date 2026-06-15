@@ -22,20 +22,14 @@ export function SessionCard({
             <p className="text-xl font-bold text-[var(--color-text)]">
               {session.title}
             </p>
-            <p className="text-sm text-[var(--color-text-soft)]">
-              Internal room code:{" "}
-              <span className="font-mono text-[var(--color-primary-strong)]">
-                {session.join_code}
-              </span>
-            </p>
           </div>
           <Badge>{session.status}</Badge>
         </div>
         <div className="space-y-1 text-sm text-[var(--color-text-soft)]">
           {studentName ? <p>Student: {studentName}</p> : null}
           <p>Created: {formatDateTime(session.created_at)}</p>
-          <p>Joined students: {participantCount}</p>
-          <p>Recorded time: {formatSeconds(session.elapsed_seconds)}</p>
+          <p>Attendance: {participantCount > 0 ? "Student joined" : "Waiting"}</p>
+          <p>Lesson time: {formatSeconds(session.elapsed_seconds)}</p>
         </div>
       </div>
 
@@ -46,7 +40,7 @@ export function SessionCard({
           )}&sessionTitle=${encodeURIComponent(session.title)}`}
           className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-[var(--color-primary)] px-5 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-strong)]"
         >
-          Enter video room
+          Enter classroom
         </Link>
       </div>
     </Card>

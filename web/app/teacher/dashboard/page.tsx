@@ -21,19 +21,18 @@ export default async function TeacherDashboardPage() {
   );
 
   return (
-    <main className="min-h-screen px-6 py-8 lg:px-10">
+    <main className="min-h-screen px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
       <div className="mx-auto max-w-7xl space-y-8">
         <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <Card className="space-y-6">
             <Badge>Teacher dashboard</Badge>
             <div className="space-y-3">
-              <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text)]">
+              <h1 className="text-3xl font-bold text-[var(--color-text)] sm:text-4xl">
                 Welcome back, {profile.full_name}.
               </h1>
               <p className="max-w-2xl text-sm leading-7 text-[var(--color-text-soft)]">
-                Create private lessons for your assigned students and move
-                straight into the browser-based lesson room with the first
-                therapy worksheet demo ready to try.
+                Prepare private lessons for your students, open the classroom,
+                and continue from where each learner left off.
               </p>
             </div>
 
@@ -42,7 +41,7 @@ export default async function TeacherDashboardPage() {
                 href="/teacher/sessions/new"
                 className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-[var(--color-primary)] px-6 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-strong)]"
               >
-                Create session
+                Create lesson
               </Link>
               <Link
                 href="/password/change"
@@ -65,8 +64,8 @@ export default async function TeacherDashboardPage() {
               <p className="text-sm text-[var(--color-text-soft)]">
                 {profile.email}
               </p>
-              <p className="text-sm text-[var(--color-text-soft)]">
-                Role: {profile.role}
+              <p className="text-sm capitalize text-[var(--color-text-soft)]">
+                Account: {profile.role}
               </p>
               <p className="text-sm text-[var(--color-text-soft)]">
                 Assigned students: {assignedStudents.length}
@@ -82,7 +81,7 @@ export default async function TeacherDashboardPage() {
                 Assigned students
               </h2>
               <p className="text-sm text-[var(--color-text-soft)]">
-                These student accounts are linked to you by an admin.
+                Students currently assigned to your teaching list.
               </p>
             </div>
             <Badge>{assignedStudents.length}</Badge>
@@ -107,8 +106,8 @@ export default async function TeacherDashboardPage() {
                 No assigned students yet
               </p>
               <p className="text-sm leading-6 text-[var(--color-text-soft)]">
-                Ask an admin to assign a student to your account before you
-                create private lessons.
+                Ask an administrator to add a student to your teaching list
+                before creating a lesson.
               </p>
             </Card>
           )}
@@ -118,11 +117,10 @@ export default async function TeacherDashboardPage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-[var(--color-text)]">
-                Active sessions
+                Active lessons
               </h2>
               <p className="text-sm text-[var(--color-text-soft)]">
-                These are the live tutoring rooms currently available to your
-                assigned students.
+                Lessons that are ready for you and your students.
               </p>
             </div>
             <Badge>{sessions.length} active</Badge>
@@ -143,11 +141,11 @@ export default async function TeacherDashboardPage() {
           ) : (
             <Card className="space-y-3">
               <p className="text-lg font-semibold text-[var(--color-text)]">
-                No active sessions yet
+                No active lessons yet
               </p>
               <p className="text-sm leading-6 text-[var(--color-text-soft)]">
-                Create your first session to generate a join code and launch the
-                lesson room.
+                Create your first lesson and invite the assigned student to
+                begin.
               </p>
             </Card>
           )}

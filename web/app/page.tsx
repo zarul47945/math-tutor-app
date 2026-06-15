@@ -1,103 +1,162 @@
+import {
+  ArrowRight,
+  BookOpenCheck,
+  CalendarCheck,
+  GraduationCap,
+  MonitorPlay,
+  PenTool,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+const lessonFeatures = [
+  {
+    icon: MonitorPlay,
+    label: "Meet face to face",
+    text: "See and hear each other clearly during every lesson.",
+    tone: "bg-[#e5f1ff] text-[#1769aa]",
+  },
+  {
+    icon: PenTool,
+    label: "Work together",
+    text: "Write, draw, explain, and solve questions on one shared board.",
+    tone: "bg-[#e0f5ed] text-[#16805d]",
+  },
+  {
+    icon: CalendarCheck,
+    label: "Stay organised",
+    text: "Lessons, timing, worksheets, and student progress stay in one place.",
+    tone: "bg-[#fff0df] text-[#b85f12]",
+  },
+];
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(22,93,255,0.12),_transparent_40%),linear-gradient(180deg,_#f7f9fd_0%,_#eef3fb_100%)] px-6 py-8 text-[var(--color-text)] lg:px-10">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-7xl flex-col rounded-[36px] border border-white/70 bg-white/80 p-6 shadow-[0_30px_80px_rgba(18,32,51,0.12)] backdrop-blur md:p-10">
-        <header className="flex flex-col gap-5 border-b border-[var(--color-border)] pb-8 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-4">
-            <Badge>Browser-first tutoring platform</Badge>
-            <div className="space-y-3">
-              <h1 className="max-w-4xl text-4xl font-bold tracking-tight text-[var(--color-text)] md:text-6xl md:leading-[1.05]">
-                Live math tutoring for laptops first, with sessions, video,
-                timers, and a canvas ready for real lessons.
-              </h1>
-              <p className="max-w-2xl text-base leading-7 text-[var(--color-text-soft)] md:text-lg">
-                This web app is the foundation for your real tutoring business:
-                staff auth, student account login, LiveKit calls, session
-                tracking, and a structure that can later be wrapped into Tauri
-                or Electron for desktop apps.
-              </p>
+    <main className="min-h-screen overflow-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
+      <header className="border-b border-[var(--color-border)] bg-white/95">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex min-w-0 items-center gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary)] text-white shadow-sm">
+              <GraduationCap size={24} strokeWidth={2.3} />
+            </span>
+            <span className="truncate text-lg font-bold">Math Tutor</span>
+          </Link>
+
+          <Link
+            href="/teacher/login"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white px-4 text-sm font-semibold transition hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+          >
+            Staff sign in
+            <ArrowRight className="ml-2" size={16} />
+          </Link>
+        </div>
+      </header>
+
+      <section className="relative border-b border-[var(--color-border)] bg-white">
+        <div className="absolute inset-y-0 right-0 hidden w-[38%] bg-[linear-gradient(135deg,#e8f2ff_0%,#d8f5ee_100%)] lg:block" />
+        <div className="relative mx-auto grid min-h-[560px] max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1.15fr_0.85fr] lg:px-8">
+          <div className="max-w-3xl">
+            <p className="mb-5 inline-flex items-center gap-2 text-sm font-bold uppercase text-[var(--color-primary)]">
+              <Sparkles size={17} />
+              Personal online mathematics lessons
+            </p>
+            <h1 className="max-w-3xl text-4xl font-bold leading-tight sm:text-5xl lg:text-6xl">
+              Learn mathematics together, wherever you are.
+            </h1>
+            <p className="mt-6 max-w-2xl text-base leading-7 text-[var(--color-text-soft)] sm:text-lg">
+              A focused classroom for live teaching, shared working, timed
+              practice, and lessons matched to each student&apos;s level.
+            </p>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2 sm:max-w-xl">
+              <Link
+                href="/student/login"
+                className="inline-flex min-h-14 items-center justify-center rounded-xl bg-[var(--color-primary)] px-6 text-base font-semibold text-white transition hover:bg-[var(--color-primary-strong)]"
+              >
+                <GraduationCap className="mr-2" size={20} />
+                Student sign in
+              </Link>
+              <Link
+                href="/teacher/login"
+                className="inline-flex min-h-14 items-center justify-center rounded-xl border border-[var(--color-border-strong)] bg-white px-6 text-base font-semibold transition hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+              >
+                <Users className="mr-2" size={20} />
+                Teacher or admin
+              </Link>
             </div>
+
+            <p className="mt-5 text-sm text-[var(--color-text-soft)]">
+              Works in your web browser on phones, tablets, and computers.
+            </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-            <Link
-              href="/teacher/login"
-              className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-[var(--color-primary)] px-6 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-strong)]"
-            >
-              Staff login
+          <div className="relative mx-auto w-full max-w-xl lg:max-w-none">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border-[6px] border-white bg-white shadow-[0_28px_75px_rgba(18,32,51,0.22)]">
+              <Image
+                alt="A student learning mathematics online with a teacher using video and a shared digital worksheet"
+                className="object-cover"
+                fill
+                priority
+                sizes="(max-width: 1024px) 100vw, 42vw"
+                src="/images/online-math-tutoring-hero.png"
+              />
+              <div className="absolute bottom-4 left-4 flex items-center gap-2 rounded-xl bg-white/95 px-4 py-3 text-sm font-semibold shadow-lg backdrop-blur">
+                <BookOpenCheck className="text-[var(--color-success)]" size={20} />
+                Live guided learning
+              </div>
+            </div>
+            <div className="absolute -bottom-5 -right-2 hidden items-center gap-3 rounded-2xl border border-white bg-[#fff5de] px-4 py-3 shadow-lg sm:flex">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-[#ffd977] text-[#8b5700]">
+                <ShieldCheck size={21} />
+              </span>
+              <div>
+                <p className="text-xs font-semibold uppercase text-[#8b5700]">
+                  Personal
+                </p>
+                <p className="text-sm font-bold">One student at a time</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+        <div className="grid gap-px overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-border)] md:grid-cols-3">
+          {lessonFeatures.map((feature) => {
+            const Icon = feature.icon;
+            return (
+              <div key={feature.label} className="bg-white p-6 sm:p-8">
+                <span
+                  className={`flex size-12 items-center justify-center rounded-xl ${feature.tone}`}
+                >
+                  <Icon size={24} strokeWidth={2.1} />
+                </span>
+                <h2 className="mt-5 text-xl font-bold">{feature.label}</h2>
+                <p className="mt-3 text-sm leading-6 text-[var(--color-text-soft)]">
+                  {feature.text}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <footer className="border-t border-[var(--color-border)] bg-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 text-sm text-[var(--color-text-soft)] sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+          <p>Math Tutor online classroom</p>
+          <div className="flex gap-5">
+            <Link href="/password/forgot" className="hover:text-[var(--color-text)]">
+              Reset password
             </Link>
-            <Link
-              href="/student/login"
-              className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-white px-6 text-sm font-semibold text-[var(--color-text)] transition hover:bg-[var(--color-surface-soft)]"
-            >
-              Student login
+            <Link href="/student/login" className="hover:text-[var(--color-text)]">
+              Student access
             </Link>
           </div>
-        </header>
-
-        <section className="mt-8 grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
-          <Card className="relative overflow-hidden">
-            <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-[var(--color-primary-soft)] blur-3xl" />
-            <div className="relative grid gap-8 lg:grid-cols-2">
-              <div className="space-y-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-text-soft)]">
-                  Staff flow
-                </p>
-                <ul className="space-y-3 text-sm leading-6 text-[var(--color-text-soft)]">
-                  <li>Teacher and admin email/password auth with Supabase</li>
-                  <li>Create sessions and share a short join code</li>
-                  <li>See active sessions and enter browser-based LiveKit rooms</li>
-                  <li>Start and stop a lesson timer while teaching</li>
-                </ul>
-              </div>
-              <div className="space-y-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-text-soft)]">
-                  Student flow
-                </p>
-                <ul className="space-y-3 text-sm leading-6 text-[var(--color-text-soft)]">
-                  <li>Student account login with Supabase</li>
-                  <li>Join lessons assigned directly to the student account</li>
-                  <li>Re-enter personal lessons from the student dashboard</li>
-                  <li>Use the shared whiteboard canvas inside the lesson room</li>
-                </ul>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="bg-[var(--color-surface-strong)] text-[var(--color-text-inverse)]">
-            <div className="space-y-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/60">
-                Product direction
-              </p>
-              <h2 className="text-2xl font-bold tracking-tight">
-                Web app first, desktop wrapper later.
-              </h2>
-              <p className="text-sm leading-7 text-white/72">
-                The structure is intentionally browser-safe so you can iterate in
-                Chrome and Edge now, then wrap the same app with Tauri or
-                Electron for Windows and macOS without rebuilding the product
-                from scratch.
-              </p>
-              <div className="grid gap-3">
-                <div className="rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm">
-                  Next.js App Router + Tailwind UI
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm">
-                  Supabase auth, sessions, participants, and timer state
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm">
-                  LiveKit Web SDK with secure token issuance
-                </div>
-              </div>
-            </div>
-          </Card>
-        </section>
-      </div>
+        </div>
+      </footer>
     </main>
   );
 }

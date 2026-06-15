@@ -173,7 +173,7 @@ export function LiveRoom({
 
       if (role === "student" && !participantId) {
         if (isMounted) {
-          setError("The student account participant could not be verified for this session.");
+          setError("Your account could not be verified for this lesson.");
           setIsLoading(false);
         }
         return;
@@ -199,7 +199,7 @@ export function LiveRoom({
         ]);
 
         if (!resolvedRoomState) {
-          throw new Error("This session is no longer active.");
+          throw new Error("This lesson is no longer active.");
         }
 
         if (!isMounted) {
@@ -240,12 +240,12 @@ export function LiveRoom({
             <Badge>Preparing lesson room</Badge>
             <div className="space-y-3">
               <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text)]">
-                {sessionTitle ?? "Loading session"}
+                {sessionTitle ?? "Loading lesson"}
               </h1>
               <p className="text-sm leading-6 text-[var(--color-text-soft)]">
                 {error
                   ? error
-                  : "Connecting your browser to Supabase and LiveKit so the lesson room is ready."}
+                  : "Preparing your camera, audio, and lesson materials."}
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -655,7 +655,7 @@ function RoomExperience({
           setFeedback(
             participantError instanceof Error
               ? participantError.message
-              : "Unable to load the joined students for this session.",
+              : "Unable to load the students for this lesson.",
           );
         }
       }
@@ -991,9 +991,9 @@ function RoomExperience({
   };
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <section className="space-y-6">
-        <Card className="space-y-5 p-6">
+        <Card className="space-y-5 p-4 sm:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-3">
@@ -1003,12 +1003,9 @@ function RoomExperience({
                 </Badge>
               </div>
               <div className="space-y-2">
-                <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text)]">
+                <h1 className="text-2xl font-bold text-[var(--color-text)] sm:text-3xl">
                   {sessionTitle ?? sessionState.title}
                 </h1>
-                <p className="font-mono text-lg text-[var(--color-primary-strong)]">
-                  Room code: {joinCode}
-                </p>
               </div>
             </div>
 
@@ -1125,15 +1122,11 @@ function RoomExperience({
 
       <aside className="space-y-6">
         <Card className="space-y-4">
-          <Badge>Session details</Badge>
+          <Badge>Lesson details</Badge>
           <div className="space-y-3 text-sm text-[var(--color-text-soft)]">
             <p>
               <span className="font-semibold text-[var(--color-text)]">Role:</span>{" "}
               {role}
-            </p>
-            <p>
-              <span className="font-semibold text-[var(--color-text)]">Join code:</span>{" "}
-              {joinCode}
             </p>
             {studentName ? (
               <p>
@@ -1151,9 +1144,9 @@ function RoomExperience({
             </p>
             <p>
               <span className="font-semibold text-[var(--color-text)]">
-                Therapy demo:
+                Practice activity:
               </span>{" "}
-              Keyboard answers plus writing pad worksheet
+                Keyboard or handwriting worksheet
             </p>
           </div>
         </Card>
@@ -1165,7 +1158,7 @@ function RoomExperience({
                 Connected now
               </p>
               <p className="text-sm text-[var(--color-text-soft)]">
-                LiveKit participants currently in the room.
+                People currently in this classroom.
               </p>
             </div>
             <Badge>{participants.length}</Badge>
@@ -1207,7 +1200,7 @@ function RoomExperience({
                   Joined students
                 </p>
                 <p className="text-sm text-[var(--color-text-soft)]">
-                  Supabase session participant records for this lesson.
+                  Students who have joined this lesson.
                 </p>
               </div>
               <Badge>{joinedStudents.length}</Badge>
@@ -1230,7 +1223,7 @@ function RoomExperience({
                 ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-[var(--color-border)] px-4 py-5 text-sm text-[var(--color-text-soft)]">
-                  No students have joined this session yet.
+                  No students have joined this lesson yet.
                 </div>
               )}
             </div>

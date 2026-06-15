@@ -31,7 +31,7 @@ export function StudentAssignedSessionCard({
         );
 
         if (!result) {
-          setFeedback("This lesson is no longer active.");
+          setFeedback("This lesson is no longer available.");
           return;
         }
 
@@ -63,10 +63,10 @@ export function StudentAssignedSessionCard({
             Created: {formatDateTime(session.created_at)}
           </p>
           <p className="text-sm text-[var(--color-text-soft)]">
-            Recorded time: {formatSeconds(session.elapsed_seconds)}
+            Lesson time: {formatSeconds(session.elapsed_seconds)}
           </p>
           <p className="text-sm text-[var(--color-text-soft)]">
-            Lesson module: Therapy worksheet demo
+            Activity: Guided skills worksheet
           </p>
         </div>
       </div>

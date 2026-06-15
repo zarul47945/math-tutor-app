@@ -35,17 +35,17 @@ export function RoomVideoTile({
 
   return (
     <div
-      className="lesson-video-tile relative overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface-strong)] shadow-[var(--shadow-card)]"
+      className="lesson-video-tile relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-strong)] shadow-[var(--shadow-card)]"
       ref={containerRef}
     >
       <FullscreenToggle targetRef={containerRef} />
       {hasCameraTrack ? (
         <VideoTrack
-          className="lesson-video-media h-full min-h-[280px] w-full bg-[var(--color-surface-strong)] object-cover"
+          className="lesson-video-media h-full min-h-[220px] w-full bg-[var(--color-surface-strong)] object-cover sm:min-h-[280px]"
           trackRef={resolvedTrackRef}
         />
       ) : (
-        <div className="lesson-video-fallback flex min-h-[280px] items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(22,93,255,0.38),_rgba(15,23,42,0.96)_55%)] px-6">
+        <div className="lesson-video-fallback flex min-h-[220px] items-center justify-center bg-[linear-gradient(145deg,#17335f,#10233f)] px-6 sm:min-h-[280px]">
           <div className="space-y-3 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/10 text-2xl font-semibold text-white">
               {participantLabel.charAt(0).toUpperCase()}

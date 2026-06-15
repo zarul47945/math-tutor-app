@@ -64,7 +64,7 @@ export function AdminTeacherStudentAssignmentForm({
 
       <Field label="Teacher">
         <select
-          className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-white px-4 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary-soft)]"
+          className="h-12 w-full rounded-xl border border-[var(--color-border)] bg-white px-4 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary-soft)]"
           onChange={(event) => setTeacherId(event.target.value)}
           value={teacherId}
         >
@@ -78,7 +78,7 @@ export function AdminTeacherStudentAssignmentForm({
 
       <Field label="Student">
         <select
-          className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-white px-4 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary-soft)]"
+          className="h-12 w-full rounded-xl border border-[var(--color-border)] bg-white px-4 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary-soft)]"
           onChange={(event) => setStudentId(event.target.value)}
           value={studentId}
         >

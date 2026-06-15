@@ -19,7 +19,7 @@ export default async function AdminAssignmentsPage() {
   ]);
 
   return (
-    <main className="min-h-screen px-6 py-8 lg:px-10">
+    <main className="min-h-screen px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap gap-3">
           <Link

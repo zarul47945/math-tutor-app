@@ -1,21 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --color-bg: #f4f7fb;
+  --color-bg: #f3f6fa;
   --color-surface: #ffffff;
-  --color-surface-strong: #0f172a;
-  --color-surface-soft: #eef3fb;
-  --color-border: #d7dfef;
-  --color-border-strong: #b8c7e1;
-  --color-text: #122033;
-  --color-text-soft: #5d6b82;
+  --color-surface-strong: #10233f;
+  --color-surface-soft: #edf3f8;
+  --color-border: #d7e0e8;
+  --color-border-strong: #9fb0c0;
+  --color-text: #142033;
+  --color-text-soft: #5b697a;
   --color-text-inverse: #f8fbff;
-  --color-primary: #165dff;
-  --color-primary-strong: #0c46ca;
-  --color-primary-soft: #dce8ff;
-  --color-success: #0f9f67;
-  --color-danger: #c2410c;
-  --shadow-card: 0 20px 45px rgba(18, 32, 51, 0.08);
+  --color-primary: #1769aa;
+  --color-primary-strong: #105184;
+  --color-primary-soft: #dfeefa;
+  --color-success: #16805d;
+  --color-danger: #b94035;
+  --shadow-card: 0 14px 34px rgba(18, 32, 51, 0.08);
 }
 
 @theme inline {
@@ -35,8 +35,16 @@ body {
   min-height: 100%;
 }
 
+html {
+  background: var(--color-bg);
+  color-scheme: light;
+}
+
 body {
   font-family: var(--font-heading), sans-serif;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0)),
+    var(--color-bg);
 }
 
 a {
@@ -46,8 +54,31 @@ a {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
+}
+
+button,
+a,
+input,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.classroom-grid {
+  background-image:
+    linear-gradient(to right, rgba(23, 105, 170, 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(23, 105, 170, 0.09) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 .lesson-video-tile:fullscreen {

@@ -363,7 +363,7 @@ export function TherapyDemoSheet({
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="space-y-3">
           <div className="flex flex-wrap gap-3">
-            <Badge>Therapy demo worksheet</Badge>
+            <Badge>Skills practice</Badge>
             <Badge className="bg-[var(--color-surface-soft)] text-[var(--color-text-soft)]">
               {progressLabel}
             </Badge>

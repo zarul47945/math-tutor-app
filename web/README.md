@@ -1,6 +1,8 @@
 # Math Tutor Web
 
-Laptop-first tutoring platform built with Next.js App Router, TypeScript, Supabase, Tailwind, and the LiveKit Web React SDK.
+Responsive online tutoring platform for phones, tablets, laptops, and desktop
+computers. The product is web-only and runs in modern browsers across iOS,
+Android, macOS, and Windows.
 
 ## Stack
 
@@ -108,13 +110,14 @@ The student account room flow changes the LiveKit token function, so redeploy it
 supabase functions deploy livekit-token --project-ref nxrwcdqsvasfzwuwofyu
 ```
 
-## Desktop-ready structure
+## Web-only structure
 
-The app is organized to stay browser-first while being easy to wrap later with Tauri or Electron:
+The app is organized as a responsive web platform:
 
 - `app/` for routes
 - `components/` for UI, room controls, video, and whiteboard
 - `lib/supabase/` for auth/data access
 - `lib/livekit/` for token and room signal helpers
 
-That means the browser app can become the desktop shell later without rewriting the tutoring UI.
+New features should remain responsive, touch-friendly, and usable without
+platform-specific installation.

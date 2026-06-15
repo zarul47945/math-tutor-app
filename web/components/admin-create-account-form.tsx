@@ -61,15 +61,14 @@ export function AdminCreateAccountForm() {
   };
 
   return (
-    <Card className="max-w-3xl p-8">
+    <Card className="max-w-3xl p-5 sm:p-8">
       <div className="space-y-3">
         <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text)]">
           Create account
         </h1>
         <p className="text-sm leading-6 text-[var(--color-text-soft)]">
-          Admin-only account creation for teachers, students, and future admin
-          staff. The password is set here and the profile is created in Supabase
-          automatically.
+          Create a private account for a teacher, student, or administrator.
+          Share the email and temporary password with the new user.
         </p>
       </div>
 
@@ -105,7 +104,7 @@ export function AdminCreateAccountForm() {
 
         <Field label="Role">
           <select
-            className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-white px-4 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary-soft)]"
+            className="h-12 w-full rounded-xl border border-[var(--color-border)] bg-white px-4 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary-soft)]"
             onChange={(event) => setRole(event.target.value as AppRole)}
             value={role}
           >
@@ -136,7 +135,6 @@ export function AdminCreateAccountForm() {
           <div className="mt-3 space-y-2 text-sm text-[var(--color-text-soft)]">
             <p>Email: {createdUser.email}</p>
             <p>Role: {createdUser.role}</p>
-            <p>User ID: {createdUser.id}</p>
           </div>
         </div>
       ) : null}

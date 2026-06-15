@@ -12,19 +12,18 @@ export default async function StudentDashboardPage() {
   const sessions = await listAssignedStudentSessions(supabase);
 
   return (
-    <main className="min-h-screen px-6 py-8 lg:px-10">
+    <main className="min-h-screen px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
       <div className="mx-auto max-w-6xl space-y-8">
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <Card className="space-y-6">
             <Badge>Student dashboard</Badge>
             <div className="space-y-3">
-              <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text)]">
+              <h1 className="text-3xl font-bold text-[var(--color-text)] sm:text-4xl">
                 Welcome, {profile.full_name}.
               </h1>
               <p className="max-w-2xl text-sm leading-7 text-[var(--color-text-soft)]">
-                Your lessons are tied directly to your student account now. You
-                can join assigned sessions here without typing any manual room
-                code.
+                Your assigned lessons are gathered here. Choose a lesson when
+                your teacher is ready and continue learning.
               </p>
             </div>
 
@@ -50,8 +49,8 @@ export default async function StudentDashboardPage() {
               <p className="text-sm text-[var(--color-text-soft)]">
                 {profile.email}
               </p>
-              <p className="text-sm text-[var(--color-text-soft)]">
-                Role: {profile.role}
+              <p className="text-sm capitalize text-[var(--color-text-soft)]">
+                Account: {profile.role}
               </p>
             </div>
           </Card>
@@ -64,8 +63,7 @@ export default async function StudentDashboardPage() {
                 Assigned lessons
               </h2>
               <p className="text-sm text-[var(--color-text-soft)]">
-                Lessons your teacher has assigned directly to your student
-                account.
+                Lessons prepared for you by your teacher.
               </p>
             </div>
             <Badge>{sessions.length}</Badge>

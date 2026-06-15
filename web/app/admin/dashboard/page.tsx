@@ -9,19 +9,18 @@ export default async function AdminDashboardPage() {
   const { profile } = await requireAdminContext();
 
   return (
-    <main className="min-h-screen px-6 py-8 lg:px-10">
+    <main className="min-h-screen px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
       <div className="mx-auto max-w-5xl space-y-8">
         <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <Card className="space-y-6">
             <Badge>Admin dashboard</Badge>
             <div className="space-y-3">
-              <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text)]">
+              <h1 className="text-3xl font-bold text-[var(--color-text)] sm:text-4xl">
                 Welcome back, {profile.full_name}.
               </h1>
               <p className="max-w-2xl text-sm leading-7 text-[var(--color-text-soft)]">
-                The admin role foundation is now active. Admins can sign in
-                separately from teachers, and this dashboard is ready for the
-                next step: account creation and silent session supervision.
+                Manage staff and student access, connect students with their
+                teachers, and keep the tutoring service organised.
               </p>
             </div>
 
@@ -59,8 +58,8 @@ export default async function AdminDashboardPage() {
               <p className="text-sm text-[var(--color-text-soft)]">
                 {profile.email}
               </p>
-              <p className="text-sm text-[var(--color-text-soft)]">
-                Role: {profile.role}
+              <p className="text-sm capitalize text-[var(--color-text-soft)]">
+                Account: {profile.role}
               </p>
             </div>
           </Card>
@@ -68,12 +67,12 @@ export default async function AdminDashboardPage() {
 
         <Card className="space-y-4">
           <p className="text-lg font-semibold text-[var(--color-text)]">
-            Next admin capabilities
+            Administration
           </p>
           <ul className="space-y-3 text-sm leading-6 text-[var(--color-text-soft)]">
-            <li>Create teacher and student accounts from a secure admin-only flow.</li>
-            <li>Promote or demote roles without exposing public signup.</li>
-            <li>Join any live lesson as a silent observer with no camera or mic.</li>
+            <li>Create accounts for teachers, students, and administrators.</li>
+            <li>Assign each student to the correct teacher.</li>
+            <li>Keep account creation private and controlled.</li>
           </ul>
         </Card>
       </div>
