@@ -1077,7 +1077,7 @@ function RoomExperience({
                 />
               ))
             ) : (
-              <div className="flex min-h-[280px] items-center justify-center rounded-[28px] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-soft)] px-6 text-center text-sm leading-6 text-[var(--color-text-soft)]">
+              <div className="flex aspect-video min-h-0 items-center justify-center rounded-[28px] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-soft)] px-6 text-center text-sm leading-6 text-[var(--color-text-soft)]">
                 Waiting for the other person to join the lesson room and turn on
                 their camera.
               </div>

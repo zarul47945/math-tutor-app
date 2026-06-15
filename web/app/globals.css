@@ -82,6 +82,9 @@ select {
 }
 
 .lesson-video-tile:fullscreen {
+  aspect-ratio: auto;
+  height: 100vh;
+  width: 100vw;
   border: 0;
   border-radius: 0;
   box-shadow: none;
