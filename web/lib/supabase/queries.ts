@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { generateJoinCode } from "@/lib/session-code";
 import type {
+  LessonWorksheet,
   JoinSessionResult,
   SessionParticipant,
   SessionRoomState,
@@ -9,6 +10,7 @@ import type {
   TeacherSession,
   TeacherStudentAssignment,
 } from "@/lib/types";
+import type { TherapySet } from "@/lib/therapy-demo";
 
 export async function listTeacherSessions(
   supabase: SupabaseClient,
@@ -62,7 +64,105 @@ export async function createTeacherSession(
     }
   }
 
-      throw new Error("Unable to generate a unique join code. Please try again.");
+  throw new Error("Unable to generate a unique join code. Please try again.");
+}
+
+export async function createSessionWorksheet({
+  instructions,
+  sessionId,
+  sets,
+  supabase,
+  teacherId,
+  title,
+}: {
+  instructions?: string;
+  sessionId: string;
+  sets: TherapySet[];
+  supabase: SupabaseClient;
+  teacherId: string;
+  title: string;
+}) {
+  const { data: worksheet, error: worksheetError } = await supabase
+    .from("session_worksheets")
+    .insert({
+      instructions: instructions?.trim() || null,
+      session_id: sessionId,
+      teacher_id: teacherId,
+      title: title.trim() || "Skills practice",
+    })
+    .select("id, session_id, teacher_id, title, instructions, created_at")
+    .single();
+
+  if (worksheetError) {
+    throw worksheetError;
+  }
+
+  const questionRows = sets.flatMap((set, setIndex) =>
+    set.questions.map((question, questionIndex) => ({
+      augend: question.augend,
+      best_time_label: set.bestTimeLabel,
+      expected_answer: question.expectedAnswer,
+      position: questionIndex,
+      result: question.result,
+      set_key: set.id,
+      set_order: setIndex,
+      set_title: set.title,
+      worksheet_id: worksheet.id,
+    })),
+  );
+
+  if (questionRows.length === 0) {
+    return worksheet as Omit<LessonWorksheet, "questions">;
+  }
+
+  const { error: questionError } = await supabase
+    .from("worksheet_questions")
+    .insert(questionRows);
+
+  if (questionError) {
+    throw questionError;
+  }
+
+  return worksheet as Omit<LessonWorksheet, "questions">;
+}
+
+export async function getSessionWorksheet(
+  supabase: SupabaseClient,
+  sessionId: string,
+) {
+  const { data, error } = await supabase
+    .from("session_worksheets")
+    .select(
+      "id, session_id, teacher_id, title, instructions, created_at, worksheet_questions(id, worksheet_id, set_key, set_title, set_order, position, augend, result, expected_answer, best_time_label)",
+    )
+    .eq("session_id", sessionId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  const rawWorksheet = data as Omit<LessonWorksheet, "questions"> & {
+    worksheet_questions?: LessonWorksheet["questions"];
+  };
+
+  return {
+    created_at: rawWorksheet.created_at,
+    id: rawWorksheet.id,
+    instructions: rawWorksheet.instructions,
+    questions: (rawWorksheet.worksheet_questions ?? []).sort(
+      (leftQuestion, rightQuestion) =>
+        leftQuestion.set_order - rightQuestion.set_order ||
+        leftQuestion.position - rightQuestion.position,
+    ),
+    session_id: rawWorksheet.session_id,
+    teacher_id: rawWorksheet.teacher_id,
+    title: rawWorksheet.title,
+  } satisfies LessonWorksheet;
 }
 
 export async function joinSessionAsStudentAccount(

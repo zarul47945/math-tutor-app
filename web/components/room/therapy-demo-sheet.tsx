@@ -7,14 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
+  buildTherapyQuestionMap,
+  buildTherapyQuestionOrder,
   getCorrectAnswerCountForSet,
   getNextTherapyQuestionId,
   getTherapyQuestionIdInDirection,
-  THERAPY_DEMO_QUESTION_BY_ID,
-  THERAPY_DEMO_QUESTION_ORDER,
-  THERAPY_DEMO_SETS,
   type TherapyAnswerMap,
   type TherapyInkPoint,
+  type TherapySet,
   type TherapyInkStroke,
   type TherapySetId,
   type TherapySubmittedSetMap,
@@ -67,7 +67,10 @@ export function TherapyDemoSheet({
   onStrokeComplete,
   onSubmitSet,
   role,
+  sets,
   submittedSets,
+  worksheetInstructions,
+  worksheetTitle,
 }: {
   answers: TherapyAnswerMap;
   elapsedSeconds: number;
@@ -80,28 +83,36 @@ export function TherapyDemoSheet({
   onStrokeComplete: (stroke: TherapyInkStroke) => void;
   onSubmitSet: (setId: TherapySetId) => void;
   role: LiveKitRole;
+  sets: TherapySet[];
   submittedSets: TherapySubmittedSetMap;
+  worksheetInstructions?: string;
+  worksheetTitle?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const currentStrokeRef = useRef<TherapyInkStroke | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [activeQuestionId, setActiveQuestionId] = useState(
-    THERAPY_DEMO_QUESTION_ORDER[0] ?? "",
+    buildTherapyQuestionOrder(sets)[0] ?? "",
   );
   const [canvasSize, setCanvasSize] = useState({ height: 0, width: 0 });
   const [draftPoints, setDraftPoints] = useState<TherapyInkPoint[]>([]);
   const [inputMode, setInputMode] = useState<"keyboard" | "pen">("keyboard");
   const strokeColor = role === "teacher" ? TEACHER_INK : STUDENT_INK;
   const isStudentEditor = role === "student";
-  const allSetsSubmitted = THERAPY_DEMO_SETS.every(
+  const questionMap = useMemo(() => buildTherapyQuestionMap(sets), [sets]);
+  const questionOrder = useMemo(() => buildTherapyQuestionOrder(sets), [sets]);
+  const resolvedActiveQuestionId = questionMap.has(activeQuestionId)
+    ? activeQuestionId
+    : questionOrder[0] ?? "";
+  const allSetsSubmitted = sets.every(
     (set) => submittedSets[set.id],
   );
   const setWorkflow = useMemo(
     () =>
       Object.fromEntries(
-        THERAPY_DEMO_SETS.map((set, setIndex) => {
-          const previousSet = THERAPY_DEMO_SETS[setIndex - 1];
+        sets.map((set, setIndex) => {
+          const previousSet = sets[setIndex - 1];
           const unlocked = !previousSet || submittedSets[previousSet.id];
           const submitted = submittedSets[set.id];
 
@@ -118,7 +129,7 @@ export function TherapyDemoSheet({
         TherapySetId,
         { editable: boolean; submitted: boolean; unlocked: boolean }
       >,
-    [isStudentEditor, submittedSets],
+    [isStudentEditor, sets, submittedSets],
   );
   const canEdit = isStudentEditor && !allSetsSubmitted;
   const visibleAnswers = useMemo(() => answers, [answers]);
@@ -126,18 +137,18 @@ export function TherapyDemoSheet({
   const setScores = useMemo(
     () =>
       Object.fromEntries(
-        THERAPY_DEMO_SETS.map((set) => [
+        sets.map((set) => [
           set.id,
-          getCorrectAnswerCountForSet(answers, set.id),
+          getCorrectAnswerCountForSet(sets, answers, set.id),
         ]),
-      ) as Record<(typeof THERAPY_DEMO_SETS)[number]["id"], number>,
-    [answers],
+      ) as Record<string, number>,
+    [answers, sets],
   );
-  const activeQuestion = THERAPY_DEMO_QUESTION_BY_ID.get(activeQuestionId);
+  const activeQuestion = questionMap.get(resolvedActiveQuestionId);
   const canEditActiveQuestion = Boolean(
-    activeQuestion && setWorkflow[activeQuestion.setId].editable,
+    activeQuestion && setWorkflow[activeQuestion.setId]?.editable,
   );
-  const submittedSetCount = THERAPY_DEMO_SETS.filter(
+  const submittedSetCount = sets.filter(
     (set) => submittedSets[set.id],
   ).length;
   const progressLabel = allSetsSubmitted
@@ -171,14 +182,18 @@ export function TherapyDemoSheet({
   }, []);
 
   useEffect(() => {
-    if (!canEditActiveQuestion || inputMode !== "keyboard" || !activeQuestionId) {
+    if (
+      !canEditActiveQuestion ||
+      inputMode !== "keyboard" ||
+      !resolvedActiveQuestionId
+    ) {
       return;
     }
 
-    const activeInput = inputRefs.current[activeQuestionId];
+    const activeInput = inputRefs.current[resolvedActiveQuestionId];
     activeInput?.focus();
     activeInput?.select();
-  }, [activeQuestionId, canEditActiveQuestion, inputMode]);
+  }, [canEditActiveQuestion, inputMode, resolvedActiveQuestionId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -289,11 +304,12 @@ export function TherapyDemoSheet({
 
   const moveFocus = (direction: "down" | "left" | "right" | "up") => {
     const nextQuestionId = getTherapyQuestionIdInDirection(
-      activeQuestionId,
+      resolvedActiveQuestionId,
       direction,
+      sets,
     );
     const nextQuestion = nextQuestionId
-      ? THERAPY_DEMO_QUESTION_BY_ID.get(nextQuestionId)
+      ? questionMap.get(nextQuestionId)
       : null;
 
     if (nextQuestion && setWorkflow[nextQuestion.setId].editable) {
@@ -301,7 +317,7 @@ export function TherapyDemoSheet({
       return;
     }
 
-    setActiveQuestionId(activeQuestionId);
+    setActiveQuestionId(resolvedActiveQuestionId);
   };
 
   const handleKeyDown = (
@@ -334,9 +350,9 @@ export function TherapyDemoSheet({
 
     if (event.key === "Enter") {
       event.preventDefault();
-      const nextQuestionId = getNextTherapyQuestionId(questionId);
+      const nextQuestionId = getNextTherapyQuestionId(questionId, sets);
       const nextQuestion = nextQuestionId
-        ? THERAPY_DEMO_QUESTION_BY_ID.get(nextQuestionId)
+        ? questionMap.get(nextQuestionId)
         : null;
 
       setActiveQuestionId(
@@ -350,11 +366,11 @@ export function TherapyDemoSheet({
   const handleSubmitSetClick = (setId: TherapySetId) => {
     onSubmitSet(setId);
 
-    const currentSetIndex = THERAPY_DEMO_SETS.findIndex((set) => set.id === setId);
-    const nextSet = THERAPY_DEMO_SETS[currentSetIndex + 1];
+    const currentSetIndex = sets.findIndex((set) => set.id === setId);
+    const nextSet = sets[currentSetIndex + 1];
 
     if (nextSet) {
-      setActiveQuestionId(nextSet.questions[0]?.id ?? activeQuestionId);
+      setActiveQuestionId(nextSet.questions[0]?.id ?? resolvedActiveQuestionId);
     }
   };
 
@@ -370,10 +386,12 @@ export function TherapyDemoSheet({
           </div>
           <div className="space-y-2">
             <h2 className="text-3xl font-black uppercase tracking-tight text-[var(--color-text)]">
-              Fasa 2 Tanduk Rusa 1 / Phase 2 Tanduk Rusa 1
+              {worksheetTitle ?? "Fasa 2 Tanduk Rusa 1 / Phase 2 Tanduk Rusa 1"}
             </h2>
             <p className="max-w-3xl text-sm leading-6 text-[var(--color-text-soft)]">
-              {isStudentEditor
+              {worksheetInstructions ? (
+                worksheetInstructions
+              ) : isStudentEditor
                 ? (
                     <>
                       Students can answer by keyboard, press{" "}
@@ -428,7 +446,7 @@ export function TherapyDemoSheet({
       >
         <div className="border-t-4 border-dashed border-[var(--color-text)] pt-6">
           <div className="space-y-8">
-            {THERAPY_DEMO_SETS.map((set) => {
+            {sets.map((set) => {
               const lastQuestionId = set.questions[set.questions.length - 1]?.id;
               const { editable, submitted, unlocked } = setWorkflow[set.id];
 
@@ -479,7 +497,7 @@ export function TherapyDemoSheet({
                                     ? "border-emerald-500 bg-emerald-50"
                                     : submitted && isWrong
                                       ? "border-rose-400 bg-rose-50"
-                                      : activeQuestionId === question.id
+                                    : resolvedActiveQuestionId === question.id
                                         ? "border-[var(--color-primary)]"
                                         : "border-[var(--color-border-strong)]"
                                 } ${

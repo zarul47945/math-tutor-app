@@ -21,6 +21,7 @@ Android, macOS, and Windows.
 - Automatic profile creation support from Supabase auth metadata
 - Teacher dashboard with active sessions
 - Session creation for assigned students
+- Teacher question upload for lesson worksheets
 - Student account login and assigned-lesson dashboard
 - Browser-based LiveKit lesson room
 - Local and remote video tiles
@@ -55,6 +56,7 @@ Run these SQL files in your Supabase project, in this order:
 6. `supabase/web-room-state.sql`
 7. `supabase/teacher-students.sql`
 8. `supabase/student-account-join.sql`
+9. `supabase/lesson-worksheets.sql`
 
 These create:
 
@@ -66,6 +68,7 @@ These create:
 - timer fields and the `get_active_session_room_state` RPC
 - teacher-student assignments
 - authenticated student room join for assigned sessions
+- uploaded lesson worksheets and worksheet questions
 
 Before moving to admin-only account creation, also turn off public signup in
 Supabase Auth settings so only existing users can log in.

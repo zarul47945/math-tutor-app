@@ -111,3 +111,26 @@ export type StudentSessionSummary = {
   timer_started_at: string | null;
   elapsed_seconds: number;
 };
+
+export type LessonWorksheetQuestion = {
+  id: string;
+  worksheet_id: string;
+  set_key: string;
+  set_title: string;
+  set_order: number;
+  position: number;
+  augend: number;
+  result: number;
+  expected_answer: number;
+  best_time_label: string;
+};
+
+export type LessonWorksheet = {
+  id: string;
+  session_id: string;
+  teacher_id: string;
+  title: string;
+  instructions: string | null;
+  created_at: string;
+  questions: LessonWorksheetQuestion[];
+};

@@ -1,4 +1,4 @@
-export type TherapySetId = "set-1" | "set-2";
+export type TherapySetId = string;
 
 export type TherapyQuestion = {
   augend: number;
@@ -102,22 +102,46 @@ export const THERAPY_DEMO_QUESTION_ORDER = THERAPY_DEMO_QUESTIONS.map(
   (question) => question.id,
 );
 
-function findQuestionAtPosition(gridRow: number, gridCol: number) {
-  return THERAPY_DEMO_QUESTIONS.find(
+function flattenTherapyQuestions(sets: TherapySet[]) {
+  return sets.flatMap((set) => set.questions);
+}
+
+export function buildTherapyQuestionMap(sets: TherapySet[]) {
+  return new Map(flattenTherapyQuestions(sets).map((question) => [question.id, question]));
+}
+
+export function buildTherapyQuestionOrder(sets: TherapySet[]) {
+  return flattenTherapyQuestions(sets).map((question) => question.id);
+}
+
+export function createEmptyTherapySubmittedSets(sets: TherapySet[]) {
+  return Object.fromEntries(sets.map((set) => [set.id, false])) as TherapySubmittedSetMap;
+}
+
+function findQuestionAtPosition(
+  gridRow: number,
+  gridCol: number,
+  sets: TherapySet[] = THERAPY_DEMO_SETS,
+) {
+  return flattenTherapyQuestions(sets).find(
     (question) => question.gridRow === gridRow && question.gridCol === gridCol,
   );
 }
 
-export function getNextTherapyQuestionId(currentQuestionId: string) {
-  const currentIndex = THERAPY_DEMO_QUESTION_ORDER.indexOf(currentQuestionId);
+export function getNextTherapyQuestionId(
+  currentQuestionId: string,
+  sets: TherapySet[] = THERAPY_DEMO_SETS,
+) {
+  const questionOrder = buildTherapyQuestionOrder(sets);
+  const currentIndex = questionOrder.indexOf(currentQuestionId);
 
   if (currentIndex === -1) {
-    return THERAPY_DEMO_QUESTION_ORDER[0] ?? null;
+    return questionOrder[0] ?? null;
   }
 
   return (
-    THERAPY_DEMO_QUESTION_ORDER[currentIndex + 1] ??
-    THERAPY_DEMO_QUESTION_ORDER[currentIndex] ??
+    questionOrder[currentIndex + 1] ??
+    questionOrder[currentIndex] ??
     null
   );
 }
@@ -125,11 +149,14 @@ export function getNextTherapyQuestionId(currentQuestionId: string) {
 export function getTherapyQuestionIdInDirection(
   currentQuestionId: string,
   direction: "down" | "left" | "right" | "up",
+  sets: TherapySet[] = THERAPY_DEMO_SETS,
 ) {
-  const currentQuestion = THERAPY_DEMO_QUESTION_BY_ID.get(currentQuestionId);
+  const questionMap = buildTherapyQuestionMap(sets);
+  const questionOrder = buildTherapyQuestionOrder(sets);
+  const currentQuestion = questionMap.get(currentQuestionId);
 
   if (!currentQuestion) {
-    return THERAPY_DEMO_QUESTION_ORDER[0] ?? null;
+    return questionOrder[0] ?? null;
   }
 
   if (direction === "left" || direction === "right") {
@@ -140,6 +167,7 @@ export function getTherapyQuestionIdInDirection(
       const nextQuestion = findQuestionAtPosition(
         currentQuestion.gridRow,
         nextCol,
+        sets,
       );
 
       if (nextQuestion) {
@@ -156,7 +184,11 @@ export function getTherapyQuestionIdInDirection(
   let nextRow = currentQuestion.gridRow + rowStep;
 
   while (nextRow >= 0 && nextRow <= 9) {
-    const nextQuestion = findQuestionAtPosition(nextRow, currentQuestion.gridCol);
+    const nextQuestion = findQuestionAtPosition(
+      nextRow,
+      currentQuestion.gridCol,
+      sets,
+    );
 
     if (nextQuestion) {
       return nextQuestion.id;
@@ -169,10 +201,11 @@ export function getTherapyQuestionIdInDirection(
 }
 
 export function getCorrectAnswerCountForSet(
+  sets: TherapySet[],
   answers: TherapyAnswerMap,
   setId: TherapySetId,
 ) {
-  const set = THERAPY_DEMO_SETS.find((candidateSet) => candidateSet.id === setId);
+  const set = sets.find((candidateSet) => candidateSet.id === setId);
 
   if (!set) {
     return 0;

@@ -35,17 +35,25 @@ import {
 import type {
   TherapyAnswerMap,
   TherapyInkStroke,
+  TherapySet,
+  TherapySetId,
   TherapySubmittedSetMap,
 } from "@/lib/therapy-demo";
-import { THERAPY_DEMO_SETS } from "@/lib/therapy-demo";
+import {
+  createEmptyTherapySubmittedSets,
+  THERAPY_DEMO_SETS,
+} from "@/lib/therapy-demo";
+import { worksheetToTherapySets } from "@/lib/lesson-worksheet";
 import { fetchLiveKitToken } from "@/lib/livekit/token";
 import { createClient } from "@/lib/supabase/client";
 import {
   getActiveSessionRoomState,
+  getSessionWorksheet,
   listSessionParticipants,
   updateSessionTimer,
 } from "@/lib/supabase/queries";
 import type {
+  LessonWorksheet,
   LiveKitRole,
   LiveKitTokenResponse,
   SessionParticipant,
@@ -81,12 +89,6 @@ function normalizeTimerState(state: SessionRoomState | TimerSignalState): TimerS
 
 function hasAnyTherapyAnswer(answers: TherapyAnswerMap) {
   return Object.values(answers).some((value) => value.trim() !== "");
-}
-
-function createEmptyTherapySubmittedSets(): TherapySubmittedSetMap {
-  return Object.fromEntries(
-    THERAPY_DEMO_SETS.map((set) => [set.id, false]),
-  ) as TherapySubmittedSetMap;
 }
 
 type DeviceKind = "camera" | "microphone";
@@ -344,11 +346,16 @@ function RoomExperience({
   const [isMicrophonePending, setIsMicrophonePending] = useState(false);
   const [isTimerPending, setIsTimerPending] = useState(false);
   const [joinedStudents, setJoinedStudents] = useState<SessionParticipant[]>([]);
+  const [lessonWorksheet, setLessonWorksheet] = useState<LessonWorksheet | null>(
+    null,
+  );
   const [sessionState, setSessionState] = useState(initialRoomState);
   const [therapyAnswers, setTherapyAnswers] = useState<TherapyAnswerMap>({});
   const [therapyRevision, setTherapyRevision] = useState(0);
   const [therapySubmittedSets, setTherapySubmittedSets] =
-    useState<TherapySubmittedSetMap>(() => createEmptyTherapySubmittedSets());
+    useState<TherapySubmittedSetMap>(() =>
+      createEmptyTherapySubmittedSets(THERAPY_DEMO_SETS),
+    );
   const [therapyInkStrokes, setTherapyInkStrokes] = useState<TherapyInkStroke[]>(
     [],
   );
@@ -360,7 +367,14 @@ function RoomExperience({
   const therapyInkStrokesRef = useRef<TherapyInkStroke[]>([]);
   const therapyRevisionRef = useRef(0);
   const therapySubmittedSetsRef = useRef<TherapySubmittedSetMap>(
-    createEmptyTherapySubmittedSets(),
+    createEmptyTherapySubmittedSets(THERAPY_DEMO_SETS),
+  );
+  const therapySets = useMemo<TherapySet[]>(
+    () =>
+      lessonWorksheet?.questions.length
+        ? worksheetToTherapySets(lessonWorksheet)
+        : THERAPY_DEMO_SETS,
+    [lessonWorksheet],
   );
   const remoteParticipants = useMemo(
     () =>
@@ -514,6 +528,22 @@ function RoomExperience({
   }, [therapyRevision]);
 
   useEffect(() => {
+    const expectedSetIds = new Set(therapySets.map((set) => set.id));
+    const currentKeys = Object.keys(therapySubmittedSetsRef.current);
+    const alreadyMatches =
+      currentKeys.length === expectedSetIds.size &&
+      currentKeys.every((key) => expectedSetIds.has(key));
+
+    if (alreadyMatches) {
+      return;
+    }
+
+    const nextSubmittedSets = createEmptyTherapySubmittedSets(therapySets);
+    therapySubmittedSetsRef.current = nextSubmittedSets;
+    setTherapySubmittedSets(nextSubmittedSets);
+  }, [therapySets]);
+
+  useEffect(() => {
     if (!sessionState.timer_running) {
       return;
     }
@@ -635,6 +665,34 @@ function RoomExperience({
       window.clearInterval(intervalId);
     };
   }, [joinCode, sessionId, supabase]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadWorksheet() {
+      try {
+        const worksheet = await getSessionWorksheet(supabase, sessionId);
+
+        if (isMounted) {
+          setLessonWorksheet(worksheet);
+        }
+      } catch (worksheetError) {
+        if (isMounted) {
+          setFeedback(
+            worksheetError instanceof Error
+              ? worksheetError.message
+              : "Unable to load the lesson worksheet right now.",
+          );
+        }
+      }
+    }
+
+    void loadWorksheet();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [sessionId, supabase]);
 
   useEffect(() => {
     let isMounted = true;
@@ -929,7 +987,7 @@ function RoomExperience({
     return createLocalTherapySnapshot({
       answers: {},
       strokes: [],
-      submittedSets: createEmptyTherapySubmittedSets(),
+      submittedSets: createEmptyTherapySubmittedSets(therapySets),
     });
   };
 
@@ -946,7 +1004,7 @@ function RoomExperience({
     }
   };
 
-  const handleSubmitTherapySet = async (setId: keyof TherapySubmittedSetMap) => {
+  const handleSubmitTherapySet = async (setId: TherapySetId) => {
     if (role !== "student" || therapySubmittedSets[setId] || isTimerPending) {
       return;
     }
@@ -955,7 +1013,7 @@ function RoomExperience({
       ...therapySubmittedSetsRef.current,
       [setId]: true,
     };
-    const isFinalSet = THERAPY_DEMO_SETS.every(
+    const isFinalSet = therapySets.every(
       (set) => nextSubmittedSets[set.id],
     );
     const snapshot = createLocalTherapySnapshot({
@@ -1105,6 +1163,7 @@ function RoomExperience({
           inkStrokes={therapyInkStrokes}
           isSubmitting={isTimerPending}
           isTimerRunning={sessionState.timer_running}
+          sets={therapySets}
           onAnswerChange={handleTherapyAnswerChange}
           onClearInk={handleClearTherapyInk}
           onResetWorksheet={handleResetTherapyWorksheet}
@@ -1112,6 +1171,8 @@ function RoomExperience({
           onSubmitSet={handleSubmitTherapySet}
           role={role}
           submittedSets={therapySubmittedSets}
+          worksheetInstructions={lessonWorksheet?.instructions ?? undefined}
+          worksheetTitle={lessonWorksheet?.title}
         />
 
         <StartAudio

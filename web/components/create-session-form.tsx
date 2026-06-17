@@ -1,11 +1,19 @@
 "use client";
 
+import type { ChangeEvent } from "react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
-import { createTeacherSession } from "@/lib/supabase/queries";
+import {
+  createSessionWorksheet,
+  createTeacherSession,
+} from "@/lib/supabase/queries";
 import { createClient } from "@/lib/supabase/client";
 import type { TeacherSession, TeacherStudentAssignment } from "@/lib/types";
+import {
+  parseWorksheetUpload,
+  WORKSHEET_UPLOAD_EXAMPLE,
+} from "@/lib/worksheet-upload";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
@@ -20,9 +28,27 @@ export function CreateSessionForm({
 }) {
   const [title, setTitle] = useState("");
   const [studentId, setStudentId] = useState(assignedStudents[0]?.student_id ?? "");
+  const [worksheetText, setWorksheetText] = useState("");
   const [createdSession, setCreatedSession] = useState<TeacherSession | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const handleWorksheetFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setWorksheetText(String(reader.result ?? ""));
+    };
+    reader.onerror = () => {
+      setFeedback("Unable to read that worksheet file. Please try another file.");
+    };
+    reader.readAsText(file);
+  };
 
   const handleCreate = () => {
     startTransition(async () => {
@@ -40,12 +66,26 @@ export function CreateSessionForm({
       }
 
       try {
+        const parsedWorksheet = worksheetText.trim()
+          ? parseWorksheetUpload(worksheetText)
+          : null;
         const nextSession = await createTeacherSession(
           supabase,
           teacherId,
           title.trim(),
           studentId,
         );
+
+        if (parsedWorksheet) {
+          await createSessionWorksheet({
+            instructions: parsedWorksheet.instructions,
+            sessionId: nextSession.id,
+            sets: parsedWorksheet.sets,
+            supabase,
+            teacherId,
+            title: parsedWorksheet.title,
+          });
+        }
 
         setCreatedSession(nextSession);
         setTitle(nextSession.title);
@@ -102,6 +142,34 @@ export function CreateSessionForm({
             placeholder="e.g. Algebra Revision"
           />
         </Field>
+
+        <Field
+          label="Worksheet questions"
+          hint='Optional. Use "1 + ? = 6" or "1,6". Leave one blank line between exercises.'
+        >
+          <textarea
+            className="min-h-48 w-full rounded-xl border border-[var(--color-border)] bg-white px-4 py-3 text-sm leading-6 text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary-soft)]"
+            onChange={(event) => setWorksheetText(event.target.value)}
+            placeholder={WORKSHEET_UPLOAD_EXAMPLE}
+            value={worksheetText}
+          />
+        </Field>
+
+        <div className="rounded-[24px] border border-dashed border-[var(--color-border-strong)] bg-white p-4">
+          <p className="text-sm font-semibold text-[var(--color-text)]">
+            Upload a question file
+          </p>
+          <p className="mt-1 text-xs leading-5 text-[var(--color-text-soft)]">
+            Upload a plain text or CSV file. The file contents will fill the
+            box above before the lesson is created.
+          </p>
+          <input
+            accept=".txt,.csv,text/plain,text/csv"
+            className="mt-4 block w-full text-sm text-[var(--color-text-soft)] file:mr-4 file:min-h-11 file:rounded-xl file:border-0 file:bg-[var(--color-primary)] file:px-5 file:text-sm file:font-semibold file:text-white"
+            onChange={handleWorksheetFileChange}
+            type="file"
+          />
+        </div>
       </div>
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -132,7 +200,9 @@ export function CreateSessionForm({
         </p>
         <p className="mt-3 text-lg font-semibold text-[var(--color-text)]">
           {createdSession
-            ? "This lesson is now assigned to the selected student account."
+            ? worksheetText.trim()
+              ? "This lesson and worksheet are now assigned to the selected student account."
+              : "This lesson is now assigned to the selected student account."
             : "The selected student will see this lesson directly in their dashboard after creation."}
         </p>
         <p className="mt-3 text-sm leading-6 text-[var(--color-text-soft)]">
