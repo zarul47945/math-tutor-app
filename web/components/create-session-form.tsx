@@ -1,5 +1,6 @@
 "use client";
 
+import { FileText, Trash2, Upload } from "lucide-react";
 import type { ChangeEvent } from "react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
@@ -156,19 +157,51 @@ export function CreateSessionForm({
         </Field>
 
         <div className="rounded-[24px] border border-dashed border-[var(--color-border-strong)] bg-white p-4">
-          <p className="text-sm font-semibold text-[var(--color-text)]">
-            Upload a question file
-          </p>
-          <p className="mt-1 text-xs leading-5 text-[var(--color-text-soft)]">
-            Upload a plain text or CSV file. The file contents will fill the
-            box above before the lesson is created.
-          </p>
-          <input
-            accept=".txt,.csv,text/plain,text/csv"
-            className="mt-4 block w-full text-sm text-[var(--color-text-soft)] file:mr-4 file:min-h-11 file:rounded-xl file:border-0 file:bg-[var(--color-primary)] file:px-5 file:text-sm file:font-semibold file:text-white"
-            onChange={handleWorksheetFileChange}
-            type="file"
-          />
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-[var(--color-text)]">
+                Upload or prepare worksheet
+              </p>
+              <p className="mt-1 text-xs leading-5 text-[var(--color-text-soft)]">
+                Upload a plain text or CSV file. The file contents will fill the
+                question box above before the lesson is created.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <label
+                className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl bg-[var(--color-primary)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-strong)]"
+                htmlFor="worksheet-file-upload"
+              >
+                <Upload className="mr-2" size={18} />
+                Upload worksheet file
+              </label>
+              <input
+                accept=".txt,.csv,text/plain,text/csv"
+                className="sr-only"
+                id="worksheet-file-upload"
+                onChange={handleWorksheetFileChange}
+                type="file"
+              />
+              <Button
+                onClick={() => setWorksheetText(WORKSHEET_UPLOAD_EXAMPLE)}
+                type="button"
+                variant="secondary"
+              >
+                <FileText className="mr-2" size={18} />
+                Use sample
+              </Button>
+              <Button
+                disabled={!worksheetText.trim()}
+                onClick={() => setWorksheetText("")}
+                type="button"
+                variant="ghost"
+              >
+                <Trash2 className="mr-2" size={18} />
+                Clear
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
