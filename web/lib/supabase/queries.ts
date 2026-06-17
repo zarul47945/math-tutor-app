@@ -12,6 +12,22 @@ import type {
 } from "@/lib/types";
 import type { TherapySet } from "@/lib/therapy-demo";
 
+function buildWorksheetQuestionRows(worksheetId: string, sets: TherapySet[]) {
+  return sets.flatMap((set, setIndex) =>
+    set.questions.map((question, questionIndex) => ({
+      augend: question.augend,
+      best_time_label: set.bestTimeLabel,
+      expected_answer: question.expectedAnswer,
+      position: questionIndex,
+      result: question.result,
+      set_key: set.id,
+      set_order: setIndex,
+      set_title: set.title,
+      worksheet_id: worksheetId,
+    })),
+  );
+}
+
 export async function listTeacherSessions(
   supabase: SupabaseClient,
   teacherId: string,
@@ -30,6 +46,27 @@ export async function listTeacherSessions(
   }
 
   return (data ?? []) as TeacherSession[];
+}
+
+export async function getTeacherSession(
+  supabase: SupabaseClient,
+  teacherId: string,
+  sessionId: string,
+) {
+  const { data, error } = await supabase
+    .from("sessions")
+    .select(
+      "id, teacher_id, student_id, title, join_code, status, created_at, timer_running, timer_started_at, elapsed_seconds, session_participants(count)",
+    )
+    .eq("id", sessionId)
+    .eq("teacher_id", teacherId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as TeacherSession | null) ?? null;
 }
 
 export async function createTeacherSession(
@@ -97,19 +134,76 @@ export async function createSessionWorksheet({
     throw worksheetError;
   }
 
-  const questionRows = sets.flatMap((set, setIndex) =>
-    set.questions.map((question, questionIndex) => ({
-      augend: question.augend,
-      best_time_label: set.bestTimeLabel,
-      expected_answer: question.expectedAnswer,
-      position: questionIndex,
-      result: question.result,
-      set_key: set.id,
-      set_order: setIndex,
-      set_title: set.title,
-      worksheet_id: worksheet.id,
-    })),
-  );
+  const questionRows = buildWorksheetQuestionRows(worksheet.id, sets);
+
+  if (questionRows.length === 0) {
+    return worksheet as Omit<LessonWorksheet, "questions">;
+  }
+
+  const { error: questionError } = await supabase
+    .from("worksheet_questions")
+    .insert(questionRows);
+
+  if (questionError) {
+    throw questionError;
+  }
+
+  return worksheet as Omit<LessonWorksheet, "questions">;
+}
+
+export async function replaceSessionWorksheet({
+  instructions,
+  sessionId,
+  sets,
+  supabase,
+  teacherId,
+  title,
+}: {
+  instructions?: string;
+  sessionId: string;
+  sets: TherapySet[];
+  supabase: SupabaseClient;
+  teacherId: string;
+  title: string;
+}) {
+  const existingWorksheet = await getSessionWorksheet(supabase, sessionId);
+
+  if (!existingWorksheet) {
+    return createSessionWorksheet({
+      instructions,
+      sessionId,
+      sets,
+      supabase,
+      teacherId,
+      title,
+    });
+  }
+
+  const { data: worksheet, error: worksheetError } = await supabase
+    .from("session_worksheets")
+    .update({
+      instructions: instructions?.trim() || null,
+      title: title.trim() || "Skills practice",
+    })
+    .eq("id", existingWorksheet.id)
+    .eq("teacher_id", teacherId)
+    .select("id, session_id, teacher_id, title, instructions, created_at")
+    .single();
+
+  if (worksheetError) {
+    throw worksheetError;
+  }
+
+  const { error: deleteError } = await supabase
+    .from("worksheet_questions")
+    .delete()
+    .eq("worksheet_id", existingWorksheet.id);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  const questionRows = buildWorksheetQuestionRows(existingWorksheet.id, sets);
 
   if (questionRows.length === 0) {
     return worksheet as Omit<LessonWorksheet, "questions">;

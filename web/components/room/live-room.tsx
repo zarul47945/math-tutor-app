@@ -1297,13 +1297,21 @@ function RoomExperience({
           </p>
           <div className="flex flex-col gap-3">
             {role === "teacher" ? (
-              <Button
-                disabled={isTimerPending}
-                onClick={handleTeacherResetTimer}
-                variant="secondary"
-              >
-                Reset attempt
-              </Button>
+              <>
+                <Link
+                  href={`/teacher/sessions/${sessionId}/worksheet`}
+                  className="inline-flex min-h-12 items-center justify-center rounded-xl bg-[var(--color-primary)] px-5 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-strong)]"
+                >
+                  Edit worksheet
+                </Link>
+                <Button
+                  disabled={isTimerPending}
+                  onClick={handleTeacherResetTimer}
+                  variant="secondary"
+                >
+                  Reset attempt
+                </Button>
+              </>
             ) : null}
             <Button
               onClick={() => {

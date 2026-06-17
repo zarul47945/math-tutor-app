@@ -42,6 +42,12 @@ export function SessionCard({
         >
           Enter classroom
         </Link>
+        <Link
+          href={`/teacher/sessions/${session.id}/worksheet`}
+          className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-[var(--color-border)] px-5 text-sm font-semibold text-[var(--color-text)] transition hover:bg-[var(--color-surface-soft)]"
+        >
+          Edit worksheet
+        </Link>
       </div>
     </Card>
   );
