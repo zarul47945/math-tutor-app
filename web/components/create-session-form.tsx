@@ -10,6 +10,7 @@ import {
 } from "@/lib/supabase/queries";
 import { createClient } from "@/lib/supabase/client";
 import type { TeacherSession, TeacherStudentAssignment } from "@/lib/types";
+import { uploadWorksheetFile } from "@/lib/worksheet-files";
 import { parseWorksheetUpload } from "@/lib/worksheet-upload";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -25,6 +26,7 @@ export function CreateSessionForm({
 }) {
   const [title, setTitle] = useState("");
   const [studentId, setStudentId] = useState(assignedStudents[0]?.student_id ?? "");
+  const [worksheetFile, setWorksheetFile] = useState<File | null>(null);
   const [worksheetText, setWorksheetText] = useState("");
   const [createdSession, setCreatedSession] = useState<TeacherSession | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -55,15 +57,26 @@ export function CreateSessionForm({
           title.trim(),
           studentId,
         );
+        const worksheetAttachment = worksheetFile
+          ? await uploadWorksheetFile({
+              file: worksheetFile,
+              sessionId: nextSession.id,
+              supabase,
+              teacherId,
+            })
+          : undefined;
 
-        if (parsedWorksheet) {
+        if (parsedWorksheet || worksheetAttachment) {
           await createSessionWorksheet({
-            instructions: parsedWorksheet.instructions,
+            attachment: worksheetAttachment,
+            instructions:
+              parsedWorksheet?.instructions ??
+              "Open the uploaded worksheet file during the lesson.",
             sessionId: nextSession.id,
-            sets: parsedWorksheet.sets,
+            sets: parsedWorksheet?.sets ?? [],
             supabase,
             teacherId,
-            title: parsedWorksheet.title,
+            title: parsedWorksheet?.title ?? "Uploaded worksheet",
           });
         }
 
@@ -123,7 +136,13 @@ export function CreateSessionForm({
           />
         </Field>
 
-        <WorksheetUploadPanel onChange={setWorksheetText} value={worksheetText} />
+        <WorksheetUploadPanel
+          attachmentFile={worksheetFile}
+          inputId="create-worksheet-upload"
+          onAttachmentChange={setWorksheetFile}
+          onChange={setWorksheetText}
+          value={worksheetText}
+        />
       </div>
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -156,6 +175,8 @@ export function CreateSessionForm({
           {createdSession
             ? worksheetText.trim()
               ? "This lesson and worksheet are now assigned to the selected student account."
+              : worksheetFile
+                ? "This lesson and uploaded worksheet file are now assigned to the selected student account."
               : "This lesson is now assigned to the selected student account."
             : "The selected student will see this lesson directly in their dashboard after creation."}
         </p>

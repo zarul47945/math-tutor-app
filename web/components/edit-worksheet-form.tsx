@@ -12,6 +12,7 @@ import { worksheetToUploadText } from "@/lib/lesson-worksheet";
 import { createClient } from "@/lib/supabase/client";
 import { replaceSessionWorksheet } from "@/lib/supabase/queries";
 import type { LessonWorksheet, TeacherSession } from "@/lib/types";
+import { uploadWorksheetFile } from "@/lib/worksheet-files";
 import { parseWorksheetUpload } from "@/lib/worksheet-upload";
 
 export function EditWorksheetForm({
@@ -27,6 +28,7 @@ export function EditWorksheetForm({
   const [worksheetText, setWorksheetText] = useState(() =>
     worksheetToUploadText(worksheet),
   );
+  const [worksheetFile, setWorksheetFile] = useState<File | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -41,23 +43,37 @@ export function EditWorksheetForm({
       setFeedback(null);
       setSavedAt(null);
 
-      if (!worksheetText.trim()) {
-        setFeedback("Please add worksheet questions before saving.");
+      if (!worksheetText.trim() && !worksheetFile && !worksheet?.file_path) {
+        setFeedback("Please add questions or upload a PNG, JPEG, or PDF worksheet.");
         return;
       }
 
       try {
-        const parsedWorksheet = parseWorksheetUpload(worksheetText);
+        const parsedWorksheet = worksheetText.trim()
+          ? parseWorksheetUpload(worksheetText)
+          : null;
+        const worksheetAttachment = worksheetFile
+          ? await uploadWorksheetFile({
+              file: worksheetFile,
+              sessionId: session.id,
+              supabase,
+              teacherId,
+            })
+          : undefined;
 
         await replaceSessionWorksheet({
-          instructions: parsedWorksheet.instructions,
+          attachment: worksheetAttachment,
+          instructions:
+            parsedWorksheet?.instructions ??
+            "Open the uploaded worksheet file during the lesson.",
           sessionId: session.id,
-          sets: parsedWorksheet.sets,
+          sets: parsedWorksheet?.sets ?? [],
           supabase,
           teacherId,
-          title: parsedWorksheet.title,
+          title: parsedWorksheet?.title ?? "Uploaded worksheet",
         });
 
+        setWorksheetFile(null);
         setSavedAt(new Date().toLocaleTimeString());
         router.refresh();
       } catch (error) {
@@ -109,7 +125,18 @@ export function EditWorksheetForm({
 
       <div className="mt-8">
         <WorksheetUploadPanel
+          attachmentFile={worksheetFile}
+          existingAttachment={
+            worksheet
+              ? {
+                  file_mime_type: worksheet.file_mime_type,
+                  file_name: worksheet.file_name,
+                  file_size_bytes: worksheet.file_size_bytes,
+                }
+              : null
+          }
           inputId="edit-worksheet-file-upload"
+          onAttachmentChange={setWorksheetFile}
           onChange={setWorksheetText}
           value={worksheetText}
         />

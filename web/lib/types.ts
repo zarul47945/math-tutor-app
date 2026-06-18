@@ -131,6 +131,10 @@ export type LessonWorksheet = {
   teacher_id: string;
   title: string;
   instructions: string | null;
+  file_path: string | null;
+  file_name: string | null;
+  file_mime_type: string | null;
+  file_size_bytes: number | null;
   created_at: string;
   questions: LessonWorksheetQuestion[];
 };

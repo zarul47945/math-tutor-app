@@ -21,6 +21,7 @@ import { RoomControls } from "@/components/room/room-controls";
 import { RoomVideoTile } from "@/components/room/room-video-tile";
 import { TherapyDemoSheet } from "@/components/room/therapy-demo-sheet";
 import { WhiteboardOverlay } from "@/components/room/whiteboard-overlay";
+import { WorksheetAttachmentViewer } from "@/components/room/worksheet-attachment-viewer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -60,6 +61,7 @@ import type {
   SessionRoomState,
 } from "@/lib/types";
 import { formatDateTime, formatSeconds } from "@/lib/utils";
+import { createWorksheetFileSignedUrl } from "@/lib/worksheet-files";
 
 function backHrefForRole(role: LiveKitRole) {
   return role === "teacher" ? "/teacher/dashboard" : "/student/dashboard";
@@ -349,6 +351,7 @@ function RoomExperience({
   const [lessonWorksheet, setLessonWorksheet] = useState<LessonWorksheet | null>(
     null,
   );
+  const [worksheetFileUrl, setWorksheetFileUrl] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState(initialRoomState);
   const [therapyAnswers, setTherapyAnswers] = useState<TherapyAnswerMap>({});
   const [therapyRevision, setTherapyRevision] = useState(0);
@@ -370,10 +373,17 @@ function RoomExperience({
     createEmptyTherapySubmittedSets(THERAPY_DEMO_SETS),
   );
   const therapySets = useMemo<TherapySet[]>(
-    () =>
-      lessonWorksheet?.questions.length
-        ? worksheetToTherapySets(lessonWorksheet)
-        : THERAPY_DEMO_SETS,
+    () => {
+      if (!lessonWorksheet) {
+        return THERAPY_DEMO_SETS;
+      }
+
+      if (lessonWorksheet.questions.length > 0) {
+        return worksheetToTherapySets(lessonWorksheet);
+      }
+
+      return [];
+    },
     [lessonWorksheet],
   );
   const remoteParticipants = useMemo(
@@ -693,6 +703,43 @@ function RoomExperience({
       isMounted = false;
     };
   }, [sessionId, supabase]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadWorksheetFileUrl() {
+      setWorksheetFileUrl(null);
+
+      if (!lessonWorksheet?.file_path) {
+        return;
+      }
+
+      try {
+        const signedUrl = await createWorksheetFileSignedUrl(
+          supabase,
+          lessonWorksheet.file_path,
+        );
+
+        if (isMounted) {
+          setWorksheetFileUrl(signedUrl);
+        }
+      } catch (fileError) {
+        if (isMounted) {
+          setFeedback(
+            fileError instanceof Error
+              ? fileError.message
+              : "Unable to load the uploaded worksheet file.",
+          );
+        }
+      }
+    }
+
+    void loadWorksheetFileUrl();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [lessonWorksheet?.file_path, supabase]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1157,23 +1204,32 @@ function RoomExperience({
           />
         ) : null}
 
-        <TherapyDemoSheet
-          answers={therapyAnswers}
-          elapsedSeconds={displayedElapsedSeconds}
-          inkStrokes={therapyInkStrokes}
-          isSubmitting={isTimerPending}
-          isTimerRunning={sessionState.timer_running}
-          sets={therapySets}
-          onAnswerChange={handleTherapyAnswerChange}
-          onClearInk={handleClearTherapyInk}
-          onResetWorksheet={handleResetTherapyWorksheet}
-          onStrokeComplete={handleTherapyStrokeComplete}
-          onSubmitSet={handleSubmitTherapySet}
-          role={role}
-          submittedSets={therapySubmittedSets}
-          worksheetInstructions={lessonWorksheet?.instructions ?? undefined}
-          worksheetTitle={lessonWorksheet?.title}
-        />
+        {lessonWorksheet?.file_path ? (
+          <WorksheetAttachmentViewer
+            signedUrl={worksheetFileUrl}
+            worksheet={lessonWorksheet}
+          />
+        ) : null}
+
+        {therapySets.length > 0 ? (
+          <TherapyDemoSheet
+            answers={therapyAnswers}
+            elapsedSeconds={displayedElapsedSeconds}
+            inkStrokes={therapyInkStrokes}
+            isSubmitting={isTimerPending}
+            isTimerRunning={sessionState.timer_running}
+            sets={therapySets}
+            onAnswerChange={handleTherapyAnswerChange}
+            onClearInk={handleClearTherapyInk}
+            onResetWorksheet={handleResetTherapyWorksheet}
+            onStrokeComplete={handleTherapyStrokeComplete}
+            onSubmitSet={handleSubmitTherapySet}
+            role={role}
+            submittedSets={therapySubmittedSets}
+            worksheetInstructions={lessonWorksheet?.instructions ?? undefined}
+            worksheetTitle={lessonWorksheet?.title}
+          />
+        ) : null}
 
         <StartAudio
           className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-[var(--color-primary)] px-5 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-strong)]"

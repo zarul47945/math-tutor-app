@@ -11,6 +11,7 @@ import type {
   TeacherStudentAssignment,
 } from "@/lib/types";
 import type { TherapySet } from "@/lib/therapy-demo";
+import type { WorksheetAttachment } from "@/lib/worksheet-files";
 
 function buildWorksheetQuestionRows(worksheetId: string, sets: TherapySet[]) {
   return sets.flatMap((set, setIndex) =>
@@ -105,6 +106,7 @@ export async function createTeacherSession(
 }
 
 export async function createSessionWorksheet({
+  attachment,
   instructions,
   sessionId,
   sets,
@@ -112,6 +114,7 @@ export async function createSessionWorksheet({
   teacherId,
   title,
 }: {
+  attachment?: WorksheetAttachment;
   instructions?: string;
   sessionId: string;
   sets: TherapySet[];
@@ -122,12 +125,18 @@ export async function createSessionWorksheet({
   const { data: worksheet, error: worksheetError } = await supabase
     .from("session_worksheets")
     .insert({
+      file_mime_type: attachment?.file_mime_type ?? null,
+      file_name: attachment?.file_name ?? null,
+      file_path: attachment?.file_path ?? null,
+      file_size_bytes: attachment?.file_size_bytes ?? null,
       instructions: instructions?.trim() || null,
       session_id: sessionId,
       teacher_id: teacherId,
       title: title.trim() || "Skills practice",
     })
-    .select("id, session_id, teacher_id, title, instructions, created_at")
+    .select(
+      "id, session_id, teacher_id, title, instructions, file_path, file_name, file_mime_type, file_size_bytes, created_at",
+    )
     .single();
 
   if (worksheetError) {
@@ -152,6 +161,7 @@ export async function createSessionWorksheet({
 }
 
 export async function replaceSessionWorksheet({
+  attachment,
   instructions,
   sessionId,
   sets,
@@ -159,6 +169,7 @@ export async function replaceSessionWorksheet({
   teacherId,
   title,
 }: {
+  attachment?: WorksheetAttachment;
   instructions?: string;
   sessionId: string;
   sets: TherapySet[];
@@ -170,6 +181,7 @@ export async function replaceSessionWorksheet({
 
   if (!existingWorksheet) {
     return createSessionWorksheet({
+      attachment,
       instructions,
       sessionId,
       sets,
@@ -179,15 +191,28 @@ export async function replaceSessionWorksheet({
     });
   }
 
+  const attachmentFields =
+    attachment === undefined
+      ? {}
+      : {
+          file_mime_type: attachment.file_mime_type,
+          file_name: attachment.file_name,
+          file_path: attachment.file_path,
+          file_size_bytes: attachment.file_size_bytes,
+        };
+
   const { data: worksheet, error: worksheetError } = await supabase
     .from("session_worksheets")
     .update({
+      ...attachmentFields,
       instructions: instructions?.trim() || null,
       title: title.trim() || "Skills practice",
     })
     .eq("id", existingWorksheet.id)
     .eq("teacher_id", teacherId)
-    .select("id, session_id, teacher_id, title, instructions, created_at")
+    .select(
+      "id, session_id, teacher_id, title, instructions, file_path, file_name, file_mime_type, file_size_bytes, created_at",
+    )
     .single();
 
   if (worksheetError) {
@@ -227,7 +252,7 @@ export async function getSessionWorksheet(
   const { data, error } = await supabase
     .from("session_worksheets")
     .select(
-      "id, session_id, teacher_id, title, instructions, created_at, worksheet_questions(id, worksheet_id, set_key, set_title, set_order, position, augend, result, expected_answer, best_time_label)",
+      "id, session_id, teacher_id, title, instructions, file_path, file_name, file_mime_type, file_size_bytes, created_at, worksheet_questions(id, worksheet_id, set_key, set_title, set_order, position, augend, result, expected_answer, best_time_label)",
     )
     .eq("session_id", sessionId)
     .maybeSingle();
@@ -246,6 +271,10 @@ export async function getSessionWorksheet(
 
   return {
     created_at: rawWorksheet.created_at,
+    file_mime_type: rawWorksheet.file_mime_type,
+    file_name: rawWorksheet.file_name,
+    file_path: rawWorksheet.file_path,
+    file_size_bytes: rawWorksheet.file_size_bytes,
     id: rawWorksheet.id,
     instructions: rawWorksheet.instructions,
     questions: (rawWorksheet.worksheet_questions ?? []).sort(
