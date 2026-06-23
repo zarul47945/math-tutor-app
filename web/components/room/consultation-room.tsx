@@ -129,11 +129,11 @@ function ConsultationVideoTile({
   const displayName = participantName(participant) || label;
 
   return (
-    <div className="relative min-h-[220px] overflow-hidden rounded-2xl border border-white/10 bg-[#0b1220] shadow-2xl lg:min-h-[260px]">
-      <div className="absolute left-4 top-4 z-10 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-lg">
+    <div className="relative min-h-[150px] overflow-hidden rounded-2xl border border-white/10 bg-[#0b1220] shadow-2xl lg:min-h-[170px]">
+      <div className="absolute left-3 top-3 z-10 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-lg">
         {roleLabel}
       </div>
-      <div className="absolute right-4 top-4 z-10 rounded-lg bg-black/50 px-3 py-2 text-emerald-300 shadow-lg backdrop-blur">
+      <div className="absolute right-3 top-3 z-10 rounded-lg bg-black/50 px-2.5 py-1.5 text-xs text-emerald-300 shadow-lg backdrop-blur">
         ||||
       </div>
       {resolvedTrackRef ? (
@@ -144,7 +144,7 @@ function ConsultationVideoTile({
       ) : (
         <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_top,#1d4ed8,#111827_55%)]">
           <div className="space-y-3 text-center">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white/10 text-3xl font-black text-white">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-2xl font-black text-white">
               {displayName.charAt(0).toUpperCase()}
             </div>
             <p className="text-sm font-semibold text-white/80">
@@ -153,8 +153,8 @@ function ConsultationVideoTile({
           </div>
         </div>
       )}
-      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/85 via-black/30 to-transparent px-5 py-4">
-        <p className="font-bold text-white">{displayName}</p>
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/85 via-black/30 to-transparent px-4 py-3">
+        <p className="text-sm font-bold text-white">{displayName}</p>
         <div className="rounded-full bg-black/45 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-white">
           {participant?.isCameraEnabled ? "Cam on" : "Cam off"}
         </div>
@@ -218,6 +218,7 @@ export function ConsultationRoom({
   const [selectedColor, setSelectedColor] = useState("#165dff");
   const [selectedSize, setSelectedSize] = useState(4);
   const [selectedTool, setSelectedTool] = useState<WhiteboardTool>("pen");
+  const [isBoardFullMode, setIsBoardFullMode] = useState(false);
   const remoteParticipant = remoteParticipants[0] ?? null;
   const tutorParticipant = role === "teacher" ? localParticipant : remoteParticipant;
   const studentParticipant = role === "student" ? localParticipant : remoteParticipant;
@@ -235,6 +236,9 @@ export function ConsultationRoom({
         : null;
   const currentStrokeColor = selectedTool === "eraser" ? "#ffffff" : selectedColor;
   const canClear = whiteboardStrokes.length > 0;
+  const boardClassName = isBoardFullMode
+    ? "fixed inset-0 z-50 overflow-hidden rounded-none bg-white shadow-2xl"
+    : "relative min-h-[58vh] overflow-hidden rounded-2xl bg-white shadow-2xl lg:min-h-[62vh]";
 
   const tools = useMemo(
     () =>
@@ -268,6 +272,27 @@ export function ConsultationRoom({
 
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!isBoardFullMode) {
+      return;
+    }
+
+    const originalOverflow = document.body.style.overflow;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsBoardFullMode(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isBoardFullMode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -370,6 +395,73 @@ export function ConsultationRoom({
     event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
+  const renderToolControls = (compact = false) => (
+    <div className={`flex flex-wrap gap-2 ${compact ? "max-w-5xl" : ""}`}>
+      {tools.map(([tool, label]) => (
+        <button
+          className={`min-h-12 rounded-xl border px-4 text-sm font-semibold transition ${
+            selectedTool === tool
+              ? "border-blue-400 bg-blue-600 text-white"
+              : compact
+                ? "border-slate-200 bg-white text-slate-950 shadow-sm hover:bg-slate-50"
+                : "border-white/10 bg-white/5 text-white hover:bg-white/10"
+          }`}
+          key={tool}
+          onClick={() => setSelectedTool(tool)}
+          type="button"
+        >
+          {label}
+        </button>
+      ))}
+      {CONSULTATION_COLORS.map((color) => (
+        <button
+          aria-label={`Use color ${color}`}
+          className={`h-12 w-12 rounded-full border-2 ${
+            selectedColor === color
+              ? compact
+                ? "border-slate-950"
+                : "border-white"
+              : compact
+                ? "border-slate-200"
+                : "border-white/20"
+          }`}
+          key={color}
+          onClick={() => setSelectedColor(color)}
+          style={{ backgroundColor: color }}
+          type="button"
+        />
+      ))}
+      <select
+        className={`min-h-12 rounded-xl border px-3 text-sm font-semibold ${
+          compact
+            ? "border-slate-200 bg-white text-slate-950"
+            : "border-white/10 bg-white/5 text-white"
+        }`}
+        onChange={(event) => setSelectedSize(Number(event.target.value))}
+        value={selectedSize}
+      >
+        {[2, 4, 8, 12, 16].map((size) => (
+          <option className="text-slate-950" key={size} value={size}>
+            {size}px
+          </option>
+        ))}
+      </select>
+      <Button disabled={!canUndo} onClick={onUndoWhiteboard} variant="secondary">
+        Undo
+      </Button>
+      <Button disabled={!canClear} onClick={onClearWhiteboard} variant="secondary">
+        Clear All
+      </Button>
+      {compact ? (
+        <Button onClick={() => setIsBoardFullMode(false)}>Exit full mode</Button>
+      ) : (
+        <Button onClick={() => setIsBoardFullMode(true)} variant="secondary">
+          Full board
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-[#07111d] px-4 py-4 text-white lg:px-6">
       <div className="mx-auto flex max-w-[1800px] flex-col gap-4">
@@ -408,7 +500,7 @@ export function ConsultationRoom({
           </div>
         ) : null}
 
-        <section className="grid gap-4 xl:grid-cols-[1fr_1.35fr_1fr]">
+        <section className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)_260px]">
           <ConsultationVideoTile
             label="Tutor"
             participant={tutorParticipant}
@@ -416,7 +508,7 @@ export function ConsultationRoom({
             trackRef={tutorTrackRef}
           />
 
-          <div className="rounded-2xl bg-white p-6 text-slate-950 shadow-2xl">
+          <div className="rounded-2xl bg-white p-5 text-slate-950 shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
               <div>
                 <p className="font-bold text-blue-700">SPM Mathematics</p>
@@ -426,9 +518,9 @@ export function ConsultationRoom({
               </div>
               <p className="text-sm text-slate-700">Question: 1 of 5</p>
             </div>
-            <div className="space-y-6 pt-5">
+            <div className="space-y-4 pt-4">
               <p className="text-sm">1. Solve the following quadratic equation.</p>
-              <div className="text-center text-3xl font-semibold italic">
+              <div className="text-center text-2xl font-semibold italic lg:text-3xl">
                 x^2 - 5x + 6 = 0
               </div>
               <div className="text-right text-sm">[3 marks]</div>
@@ -451,7 +543,7 @@ export function ConsultationRoom({
         </section>
 
         <section
-          className="relative min-h-[46vh] overflow-hidden rounded-2xl bg-white shadow-2xl"
+          className={boardClassName}
           ref={boardRef}
           style={{
             backgroundImage:
@@ -459,6 +551,29 @@ export function ConsultationRoom({
             backgroundSize: "28px 28px",
           }}
         >
+          <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex flex-wrap items-center justify-between gap-3">
+            <div className="rounded-2xl bg-white/90 px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-950 shadow-lg backdrop-blur">
+              Consultation whiteboard
+            </div>
+            <div className="pointer-events-auto flex flex-wrap gap-2">
+              <Button onClick={onUndoWhiteboard} disabled={!canUndo} variant="secondary">
+                Undo
+              </Button>
+              <Button
+                disabled={!canClear}
+                onClick={onClearWhiteboard}
+                variant="secondary"
+              >
+                Clear board
+              </Button>
+              <Button
+                onClick={() => setIsBoardFullMode((current) => !current)}
+                variant={isBoardFullMode ? "primary" : "secondary"}
+              >
+                {isBoardFullMode ? "Exit full mode" : "Full board"}
+              </Button>
+            </div>
+          </div>
           <canvas
             className="absolute inset-0 h-full w-full cursor-crosshair touch-none"
             onPointerDown={handlePointerDown}
@@ -467,54 +582,15 @@ export function ConsultationRoom({
             onPointerUp={handlePointerUp}
             ref={canvasRef}
           />
+          {isBoardFullMode ? (
+            <div className="absolute inset-x-4 bottom-4 z-10 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
+              {renderToolControls(true)}
+            </div>
+          ) : null}
         </section>
 
         <footer className="grid gap-3 rounded-2xl border border-white/10 bg-black/40 p-3 shadow-2xl backdrop-blur xl:grid-cols-[1fr_auto_auto] xl:items-center">
-          <div className="flex flex-wrap gap-2">
-            {tools.map(([tool, label]) => (
-              <button
-                className={`min-h-12 rounded-xl border px-4 text-sm font-semibold transition ${
-                  selectedTool === tool
-                    ? "border-blue-400 bg-blue-600 text-white"
-                    : "border-white/10 bg-white/5 text-white hover:bg-white/10"
-                }`}
-                key={tool}
-                onClick={() => setSelectedTool(tool)}
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
-            {CONSULTATION_COLORS.map((color) => (
-              <button
-                aria-label={`Use color ${color}`}
-                className={`h-12 w-12 rounded-full border-2 ${
-                  selectedColor === color ? "border-white" : "border-white/20"
-                }`}
-                key={color}
-                onClick={() => setSelectedColor(color)}
-                style={{ backgroundColor: color }}
-                type="button"
-              />
-            ))}
-            <select
-              className="min-h-12 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-white"
-              onChange={(event) => setSelectedSize(Number(event.target.value))}
-              value={selectedSize}
-            >
-              {[2, 4, 8, 12, 16].map((size) => (
-                <option className="text-slate-950" key={size} value={size}>
-                  {size}px
-                </option>
-              ))}
-            </select>
-            <Button disabled={!canUndo} onClick={onUndoWhiteboard} variant="secondary">
-              Undo
-            </Button>
-            <Button disabled={!canClear} onClick={onClearWhiteboard} variant="secondary">
-              Clear All
-            </Button>
-          </div>
+          {renderToolControls()}
 
           <div className="rounded-xl bg-white/5 px-5 py-3 text-sm">
             <p className="text-white/70">Time Left</p>

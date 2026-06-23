@@ -108,6 +108,43 @@ export async function createTeacherSession(
   throw new Error("Unable to generate a unique join code. Please try again.");
 }
 
+export async function deleteTeacherSession(
+  supabase: SupabaseClient,
+  teacherId: string,
+  sessionId: string,
+) {
+  const { data: worksheet, error: worksheetError } = await supabase
+    .from("session_worksheets")
+    .select("file_path")
+    .eq("session_id", sessionId)
+    .eq("teacher_id", teacherId)
+    .maybeSingle();
+
+  if (worksheetError) {
+    throw worksheetError;
+  }
+
+  if (worksheet?.file_path) {
+    const { error: storageError } = await supabase.storage
+      .from("worksheet-files")
+      .remove([worksheet.file_path]);
+
+    if (storageError) {
+      throw storageError;
+    }
+  }
+
+  const { error } = await supabase
+    .from("sessions")
+    .delete()
+    .eq("id", sessionId)
+    .eq("teacher_id", teacherId);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function createSessionWorksheet({
   attachment,
   instructions,

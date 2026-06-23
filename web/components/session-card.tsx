@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { DeleteSessionButton } from "@/components/delete-session-button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { TeacherSession } from "@/lib/types";
@@ -42,7 +43,7 @@ export function SessionCard({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <Link
           href={`/room/${session.id}?role=teacher&joinCode=${encodeURIComponent(
             session.join_code,
@@ -59,6 +60,11 @@ export function SessionCard({
         >
           Edit worksheet
         </Link>
+        <DeleteSessionButton
+          sessionId={session.id}
+          teacherId={session.teacher_id}
+          title={session.title}
+        />
       </div>
     </Card>
   );
