@@ -40,7 +40,11 @@ export function StudentAssignedSessionCard({
             result.session.join_code,
           )}&participantId=${encodeURIComponent(
             result.participant.id,
-          )}&sessionTitle=${encodeURIComponent(result.session.title)}`,
+          )}&sessionTitle=${encodeURIComponent(
+            result.session.title,
+          )}&lessonMode=${encodeURIComponent(
+            result.session.lesson_mode ?? session.lesson_mode,
+          )}`,
         );
       } catch (error) {
         setFeedback(
@@ -66,7 +70,10 @@ export function StudentAssignedSessionCard({
             Lesson time: {formatSeconds(session.elapsed_seconds)}
           </p>
           <p className="text-sm text-[var(--color-text-soft)]">
-            Activity: Guided skills worksheet
+            Activity:{" "}
+            {session.lesson_mode === "consultation"
+              ? "Consultation classroom"
+              : "Guided skills worksheet"}
           </p>
         </div>
       </div>

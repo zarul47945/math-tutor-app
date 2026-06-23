@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { RoomControls } from "@/components/room/room-controls";
 import { RoomVideoTile } from "@/components/room/room-video-tile";
+import { ConsultationRoom } from "@/components/room/consultation-room";
 import { TherapyDemoSheet } from "@/components/room/therapy-demo-sheet";
 import { WhiteboardOverlay } from "@/components/room/whiteboard-overlay";
 import { WorksheetAttachmentViewer } from "@/components/room/worksheet-attachment-viewer";
@@ -54,6 +55,7 @@ import {
   updateSessionTimer,
 } from "@/lib/supabase/queries";
 import type {
+  LessonMode,
   LessonWorksheet,
   LiveKitRole,
   LiveKitTokenResponse,
@@ -86,6 +88,16 @@ function normalizeTimerState(state: SessionRoomState | TimerSignalState): TimerS
     elapsed_seconds: state.elapsed_seconds,
     timer_running: state.timer_running,
     timer_started_at: state.timer_started_at,
+  };
+}
+
+function withLessonMode(
+  state: SessionRoomState,
+  fallbackLessonMode: LessonMode,
+): SessionRoomState {
+  return {
+    ...state,
+    lesson_mode: state.lesson_mode ?? fallbackLessonMode,
   };
 }
 
@@ -149,6 +161,7 @@ function ensureDeviceAccessSupport() {
 
 export function LiveRoom({
   joinCode,
+  lessonMode,
   participantId,
   role,
   sessionId,
@@ -156,6 +169,7 @@ export function LiveRoom({
   studentName,
 }: {
   joinCode: string;
+  lessonMode: LessonMode;
   participantId?: string;
   role: LiveKitRole;
   sessionId: string;
@@ -210,7 +224,7 @@ export function LiveRoom({
           return;
         }
 
-        setRoomState(resolvedRoomState);
+        setRoomState(withLessonMode(resolvedRoomState, lessonMode));
         setTokenResponse(resolvedToken);
       } catch (loadError) {
         if (!isMounted) {
@@ -234,7 +248,7 @@ export function LiveRoom({
     return () => {
       isMounted = false;
     };
-  }, [joinCode, participantId, role, sessionId, supabase]);
+  }, [joinCode, lessonMode, participantId, role, sessionId, supabase]);
 
   if (isLoading || !roomState || !tokenResponse) {
     return (
@@ -295,6 +309,7 @@ export function LiveRoom({
         <RoomExperience
           initialRoomState={roomState}
           joinCode={tokenResponse.roomName}
+          lessonMode={lessonMode}
           participantId={participantId}
           role={role}
           roomError={error}
@@ -312,6 +327,7 @@ export function LiveRoom({
 function RoomExperience({
   initialRoomState,
   joinCode,
+  lessonMode,
   participantId,
   role,
   roomError,
@@ -322,6 +338,7 @@ function RoomExperience({
 }: {
   initialRoomState: SessionRoomState;
   joinCode: string;
+  lessonMode: LessonMode;
   participantId?: string;
   role: LiveKitRole;
   roomError?: string | null;
@@ -352,7 +369,9 @@ function RoomExperience({
     null,
   );
   const [worksheetFileUrl, setWorksheetFileUrl] = useState<string | null>(null);
-  const [sessionState, setSessionState] = useState(initialRoomState);
+  const [sessionState, setSessionState] = useState(
+    withLessonMode(initialRoomState, lessonMode),
+  );
   const [therapyAnswers, setTherapyAnswers] = useState<TherapyAnswerMap>({});
   const [therapyRevision, setTherapyRevision] = useState(0);
   const [therapySubmittedSets, setTherapySubmittedSets] =
@@ -655,13 +674,21 @@ function RoomExperience({
             return;
           }
 
+          const normalizedRefreshedState = withLessonMode(
+            refreshedState,
+            sessionState.lesson_mode,
+          );
           setSessionState((currentState) => {
             const hasTimerChanged =
-              currentState.elapsed_seconds !== refreshedState.elapsed_seconds ||
-              currentState.timer_running !== refreshedState.timer_running ||
-              currentState.timer_started_at !== refreshedState.timer_started_at;
+              currentState.elapsed_seconds !==
+                normalizedRefreshedState.elapsed_seconds ||
+              currentState.timer_running !==
+                normalizedRefreshedState.timer_running ||
+              currentState.timer_started_at !==
+                normalizedRefreshedState.timer_started_at ||
+              currentState.lesson_mode !== normalizedRefreshedState.lesson_mode;
 
-            return hasTimerChanged ? refreshedState : currentState;
+            return hasTimerChanged ? normalizedRefreshedState : currentState;
           });
           setTimerNow(Date.now());
         } catch {
@@ -674,7 +701,7 @@ function RoomExperience({
       isMounted = false;
       window.clearInterval(intervalId);
     };
-  }, [joinCode, sessionId, supabase]);
+  }, [joinCode, sessionId, sessionState.lesson_mode, supabase]);
 
   useEffect(() => {
     let isMounted = true;
@@ -842,8 +869,12 @@ function RoomExperience({
     );
 
     if (refreshedState) {
-      setSessionState(refreshedState);
-      return refreshedState;
+      const normalizedRefreshedState = withLessonMode(
+        refreshedState,
+        sessionState.lesson_mode,
+      );
+      setSessionState(normalizedRefreshedState);
+      return normalizedRefreshedState;
     }
 
     return null;
@@ -866,13 +897,17 @@ function RoomExperience({
         nextState,
         participantId,
       );
-      setSessionState(savedState);
+      const normalizedSavedState = withLessonMode(
+        savedState,
+        previousState.lesson_mode,
+      );
+      setSessionState(normalizedSavedState);
       setTimerNow(Date.now());
       await syncRoomSignal({
         type: "timer.state",
-        state: normalizeTimerState(savedState),
+        state: normalizeTimerState(normalizedSavedState),
       });
-      return savedState;
+      return normalizedSavedState;
     } catch (timerError) {
       setSessionState(previousState);
       await refreshSessionRoomState();
@@ -1095,6 +1130,39 @@ function RoomExperience({
     await publishTherapySnapshot(snapshot);
   };
 
+  const isRoomControlBusy =
+    isLeaving || isTimerPending || isCameraPending || isMicrophonePending;
+  const roomMessage = roomError ?? feedback ?? mediaFeedback;
+
+  if (sessionState.lesson_mode === "consultation") {
+    return (
+      <ConsultationRoom
+        cameraEnabled={isLocalCameraActive}
+        canUndo={whiteboardStrokes.some((stroke) => stroke.author === role)}
+        connectionState={connectionState}
+        displayedElapsedSeconds={displayedElapsedSeconds}
+        isBusy={isRoomControlBusy}
+        joinCode={joinCode}
+        localCameraTrackRef={localCameraTrackRef}
+        localParticipant={localParticipant}
+        microphoneEnabled={isLocalMicrophoneActive}
+        onClearWhiteboard={handleClearWhiteboard}
+        onLeave={handleLeave}
+        onStrokeComplete={handleStrokeComplete}
+        onToggleCamera={handleToggleCamera}
+        onToggleMicrophone={handleToggleMicrophone}
+        onUndoWhiteboard={handleUndoWhiteboard}
+        participantCount={participants.length}
+        remoteCameraTrackByIdentity={remoteCameraTrackByIdentity}
+        remoteParticipants={remoteParticipants}
+        role={role}
+        roomMessage={roomMessage}
+        sessionTitle={sessionTitle ?? sessionState.title}
+        whiteboardStrokes={whiteboardStrokes}
+      />
+    );
+  }
+
   return (
     <div className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <section className="space-y-6">
@@ -1144,9 +1212,7 @@ function RoomExperience({
 
           <RoomControls
             cameraEnabled={isLocalCameraActive}
-            isBusy={
-              isLeaving || isTimerPending || isCameraPending || isMicrophonePending
-            }
+            isBusy={isRoomControlBusy}
             microphoneEnabled={isLocalMicrophoneActive}
             onLeave={handleLeave}
             onToggleCamera={handleToggleCamera}
@@ -1156,9 +1222,9 @@ function RoomExperience({
             whiteboardEnabled={whiteboardEnabled}
           />
 
-          {roomError ?? feedback ?? mediaFeedback ? (
+          {roomMessage ? (
             <div className="rounded-2xl bg-[var(--color-surface-soft)] px-4 py-3 text-sm text-[var(--color-text-soft)]">
-              {roomError ?? feedback ?? mediaFeedback}
+              {roomMessage}
             </div>
           ) : null}
         </Card>

@@ -23,10 +23,19 @@ export function SessionCard({
               {session.title}
             </p>
           </div>
-          <Badge>{session.status}</Badge>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Badge>{session.lesson_mode}</Badge>
+            <Badge>{session.status}</Badge>
+          </div>
         </div>
         <div className="space-y-1 text-sm text-[var(--color-text-soft)]">
           {studentName ? <p>Student: {studentName}</p> : null}
+          <p>
+            Mode:{" "}
+            {session.lesson_mode === "consultation"
+              ? "Consultation"
+              : "Therapy"}
+          </p>
           <p>Created: {formatDateTime(session.created_at)}</p>
           <p>Attendance: {participantCount > 0 ? "Student joined" : "Waiting"}</p>
           <p>Lesson time: {formatSeconds(session.elapsed_seconds)}</p>
@@ -37,7 +46,9 @@ export function SessionCard({
         <Link
           href={`/room/${session.id}?role=teacher&joinCode=${encodeURIComponent(
             session.join_code,
-          )}&sessionTitle=${encodeURIComponent(session.title)}`}
+          )}&sessionTitle=${encodeURIComponent(
+            session.title,
+          )}&lessonMode=${encodeURIComponent(session.lesson_mode)}`}
           className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-[var(--color-primary)] px-5 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-strong)]"
         >
           Enter classroom

@@ -21,6 +21,7 @@ export type StudentProfile = AppProfile & {
 };
 
 export type SessionStatus = "active" | "ended";
+export type LessonMode = "consultation" | "therapy";
 
 export type TeacherSession = {
   id: string;
@@ -28,6 +29,7 @@ export type TeacherSession = {
   student_id?: string | null;
   title: string;
   join_code: string;
+  lesson_mode: LessonMode;
   status: SessionStatus;
   created_at: string;
   timer_running: boolean;
@@ -59,6 +61,7 @@ export type JoinSessionResult = {
     id: string;
     title: string;
     join_code: string;
+    lesson_mode?: LessonMode;
     status: SessionStatus;
     created_at: string;
   };
@@ -69,6 +72,7 @@ export type SessionRoomState = {
   id: string;
   title: string;
   join_code: string;
+  lesson_mode: LessonMode;
   status: SessionStatus;
   created_at: string;
   timer_running: boolean;
@@ -104,6 +108,7 @@ export type StudentSessionSummary = {
   participant_id?: string | null;
   title: string;
   join_code: string;
+  lesson_mode: LessonMode;
   status: SessionStatus;
   created_at: string;
   joined_at?: string | null;

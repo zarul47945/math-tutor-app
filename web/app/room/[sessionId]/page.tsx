@@ -5,7 +5,7 @@ import {
   requireStudentContext,
   requireTeacherContext,
 } from "@/lib/supabase/teacher-server";
-import type { LiveKitRole } from "@/lib/types";
+import type { LessonMode, LiveKitRole } from "@/lib/types";
 
 function readSearchParam(
   value: string | string[] | undefined,
@@ -27,8 +27,11 @@ export default async function RoomPage({
     | undefined;
   const joinCode = readSearchParam(resolvedSearchParams.joinCode);
   const participantId = readSearchParam(resolvedSearchParams.participantId);
+  const lessonModeParam = readSearchParam(resolvedSearchParams.lessonMode);
   const sessionTitle = readSearchParam(resolvedSearchParams.sessionTitle);
   let studentName = readSearchParam(resolvedSearchParams.studentName);
+  const lessonMode: LessonMode =
+    lessonModeParam === "consultation" ? "consultation" : "therapy";
 
   if (!role || !joinCode) {
     redirect("/");
@@ -49,6 +52,7 @@ export default async function RoomPage({
     <LiveRoom
       joinCode={joinCode}
       participantId={participantId}
+      lessonMode={lessonMode}
       role={role}
       sessionId={sessionId}
       sessionTitle={sessionTitle}

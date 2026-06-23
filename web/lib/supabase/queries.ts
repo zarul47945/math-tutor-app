@@ -4,6 +4,7 @@ import { generateJoinCode } from "@/lib/session-code";
 import type {
   LessonWorksheet,
   JoinSessionResult,
+  LessonMode,
   SessionParticipant,
   SessionRoomState,
   StudentSessionSummary,
@@ -36,7 +37,7 @@ export async function listTeacherSessions(
   const { data, error } = await supabase
     .from("sessions")
     .select(
-      "id, teacher_id, student_id, title, join_code, status, created_at, timer_running, timer_started_at, elapsed_seconds, session_participants(count)",
+      "id, teacher_id, student_id, title, join_code, lesson_mode, status, created_at, timer_running, timer_started_at, elapsed_seconds, session_participants(count)",
     )
     .eq("teacher_id", teacherId)
     .eq("status", "active")
@@ -57,7 +58,7 @@ export async function getTeacherSession(
   const { data, error } = await supabase
     .from("sessions")
     .select(
-      "id, teacher_id, student_id, title, join_code, status, created_at, timer_running, timer_started_at, elapsed_seconds, session_participants(count)",
+      "id, teacher_id, student_id, title, join_code, lesson_mode, status, created_at, timer_running, timer_started_at, elapsed_seconds, session_participants(count)",
     )
     .eq("id", sessionId)
     .eq("teacher_id", teacherId)
@@ -75,6 +76,7 @@ export async function createTeacherSession(
   teacherId: string,
   title: string,
   studentId: string,
+  lessonMode: LessonMode,
 ) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const joinCode = generateJoinCode();
@@ -86,10 +88,11 @@ export async function createTeacherSession(
         student_id: studentId,
         title: title.trim(),
         join_code: joinCode,
+        lesson_mode: lessonMode,
         status: "active",
       })
       .select(
-        "id, teacher_id, student_id, title, join_code, status, created_at, timer_running, timer_started_at, elapsed_seconds",
+        "id, teacher_id, student_id, title, join_code, lesson_mode, status, created_at, timer_running, timer_started_at, elapsed_seconds",
       )
       .single();
 
@@ -393,7 +396,7 @@ export async function listAssignedStudentSessions(
   const { data, error } = await supabase
     .from("sessions")
     .select(
-      "id, title, join_code, status, created_at, timer_running, timer_started_at, elapsed_seconds",
+      "id, title, join_code, lesson_mode, status, created_at, timer_running, timer_started_at, elapsed_seconds",
     )
     .eq("status", "active")
     .order("created_at", { ascending: false });
@@ -406,6 +409,7 @@ export async function listAssignedStudentSessions(
     id: string;
     title: string;
     join_code: string;
+    lesson_mode: StudentSessionSummary["lesson_mode"];
     status: StudentSessionSummary["status"];
     created_at: string;
     timer_running: boolean;
@@ -415,6 +419,7 @@ export async function listAssignedStudentSessions(
     session_id: session.id,
     title: session.title,
     join_code: session.join_code,
+    lesson_mode: session.lesson_mode,
     status: session.status,
     created_at: session.created_at,
     timer_running: session.timer_running,

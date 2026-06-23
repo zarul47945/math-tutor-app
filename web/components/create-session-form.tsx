@@ -9,7 +9,11 @@ import {
   createTeacherSession,
 } from "@/lib/supabase/queries";
 import { createClient } from "@/lib/supabase/client";
-import type { TeacherSession, TeacherStudentAssignment } from "@/lib/types";
+import type {
+  LessonMode,
+  TeacherSession,
+  TeacherStudentAssignment,
+} from "@/lib/types";
 import { uploadWorksheetFile } from "@/lib/worksheet-files";
 import { parseWorksheetUpload } from "@/lib/worksheet-upload";
 import { Button } from "@/components/ui/button";
@@ -24,6 +28,7 @@ export function CreateSessionForm({
   assignedStudents: TeacherStudentAssignment[];
   teacherId: string;
 }) {
+  const [lessonMode, setLessonMode] = useState<LessonMode>("therapy");
   const [title, setTitle] = useState("");
   const [studentId, setStudentId] = useState(assignedStudents[0]?.student_id ?? "");
   const [worksheetFile, setWorksheetFile] = useState<File | null>(null);
@@ -56,6 +61,7 @@ export function CreateSessionForm({
           teacherId,
           title.trim(),
           studentId,
+          lessonMode,
         );
         const worksheetAttachment = worksheetFile
           ? await uploadWorksheetFile({
@@ -136,6 +142,57 @@ export function CreateSessionForm({
           />
         </Field>
 
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-text)]">
+              Lesson mode
+            </p>
+            <p className="mt-1 text-xs text-[var(--color-text-soft)]">
+              Choose the classroom style before the lesson starts.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {(
+              [
+                {
+                  description:
+                    "Basic skills practice with timed answer boxes for addition, subtraction, multiplication, and division.",
+                  label: "Therapy",
+                  value: "therapy",
+                },
+                {
+                  description:
+                    "School syllabus, exam questions, guided working, and large shared whiteboard teaching.",
+                  label: "Consultation",
+                  value: "consultation",
+                },
+              ] satisfies Array<{
+                description: string;
+                label: string;
+                value: LessonMode;
+              }>
+            ).map((mode) => (
+              <button
+                className={`rounded-[22px] border px-4 py-4 text-left transition ${
+                  lessonMode === mode.value
+                    ? "border-[var(--color-primary)] bg-[var(--color-primary-soft)]"
+                    : "border-[var(--color-border)] bg-white hover:bg-[var(--color-surface-soft)]"
+                }`}
+                key={mode.value}
+                onClick={() => setLessonMode(mode.value)}
+                type="button"
+              >
+                <span className="text-base font-bold text-[var(--color-text)]">
+                  {mode.label}
+                </span>
+                <span className="mt-2 block text-sm leading-6 text-[var(--color-text-soft)]">
+                  {mode.description}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <WorksheetUploadPanel
           attachmentFile={worksheetFile}
           inputId="create-worksheet-upload"
@@ -196,7 +253,9 @@ export function CreateSessionForm({
             <Link
               href={`/room/${createdSession.id}?role=teacher&joinCode=${encodeURIComponent(
                 createdSession.join_code,
-              )}&sessionTitle=${encodeURIComponent(createdSession.title)}`}
+              )}&sessionTitle=${encodeURIComponent(
+                createdSession.title,
+              )}&lessonMode=${encodeURIComponent(createdSession.lesson_mode)}`}
               className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-[var(--color-primary)] px-5 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-strong)]"
             >
               Enter classroom
