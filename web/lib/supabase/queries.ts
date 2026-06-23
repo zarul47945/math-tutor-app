@@ -113,27 +113,6 @@ export async function deleteTeacherSession(
   teacherId: string,
   sessionId: string,
 ) {
-  const { data: worksheet, error: worksheetError } = await supabase
-    .from("session_worksheets")
-    .select("file_path")
-    .eq("session_id", sessionId)
-    .eq("teacher_id", teacherId)
-    .maybeSingle();
-
-  if (worksheetError) {
-    throw worksheetError;
-  }
-
-  if (worksheet?.file_path) {
-    const { error: storageError } = await supabase.storage
-      .from("worksheet-files")
-      .remove([worksheet.file_path]);
-
-    if (storageError) {
-      throw storageError;
-    }
-  }
-
   const { error } = await supabase
     .from("sessions")
     .delete()

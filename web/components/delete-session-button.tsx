@@ -7,6 +7,23 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { deleteTeacherSession } from "@/lib/supabase/queries";
 
+function getDeleteErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+
+  return "Unable to delete this lesson right now.";
+}
+
 export function DeleteSessionButton({
   sessionId,
   teacherId,
@@ -37,11 +54,7 @@ export function DeleteSessionButton({
       await deleteTeacherSession(supabase, teacherId, sessionId);
       router.refresh();
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to delete this lesson right now.";
-      setFeedback(message);
+      setFeedback(getDeleteErrorMessage(error));
     } finally {
       setIsDeleting(false);
     }
