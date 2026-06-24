@@ -1159,6 +1159,8 @@ function RoomExperience({
         roomMessage={roomMessage}
         sessionTitle={sessionTitle ?? sessionState.title}
         whiteboardStrokes={whiteboardStrokes}
+        worksheet={lessonWorksheet}
+        worksheetFileUrl={worksheetFileUrl}
       />
     );
   }

@@ -9,6 +9,7 @@ import type { Participant } from "livekit-client";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { ClassroomDocumentViewer } from "@/components/room/classroom-document-viewer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type {
@@ -16,7 +17,7 @@ import type {
   WhiteboardStroke,
   WhiteboardTool,
 } from "@/lib/livekit/signals";
-import type { LiveKitRole } from "@/lib/types";
+import type { LessonWorksheet, LiveKitRole } from "@/lib/types";
 import { formatSeconds } from "@/lib/utils";
 
 const CONSULTATION_COLORS = [
@@ -26,6 +27,28 @@ const CONSULTATION_COLORS = [
   "#16a34a",
   "#7c3aed",
 ];
+
+const QUESTION_PANEL_PADDING = 16;
+const QUESTION_PANEL_MIN_HEIGHT = 260;
+const QUESTION_PANEL_MIN_WIDTH = 320;
+
+type FloatingQuestionPanelState = {
+  height: number;
+  isLocked: boolean;
+  width: number;
+  x: number;
+  y: number;
+};
+
+type FloatingQuestionPanelInteraction = {
+  mode: "drag" | "resize";
+  startHeight: number;
+  startPointerX: number;
+  startPointerY: number;
+  startWidth: number;
+  startX: number;
+  startY: number;
+};
 
 function isTrackReference(
   trackRef: TrackReferenceOrPlaceholder | null,
@@ -186,6 +209,8 @@ export function ConsultationRoom({
   roomMessage,
   sessionTitle,
   whiteboardStrokes,
+  worksheet,
+  worksheetFileUrl,
 }: {
   canUndo: boolean;
   cameraEnabled: boolean;
@@ -209,12 +234,24 @@ export function ConsultationRoom({
   roomMessage?: string | null;
   sessionTitle: string;
   whiteboardStrokes: WhiteboardStroke[];
+  worksheet: LessonWorksheet | null;
+  worksheetFileUrl: string | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const currentStrokeRef = useRef<WhiteboardStroke | null>(null);
+  const questionPanelInteractionRef =
+    useRef<FloatingQuestionPanelInteraction | null>(null);
   const [activePoints, setActivePoints] = useState<WhiteboardPoint[]>([]);
   const [canvasSize, setCanvasSize] = useState({ height: 0, width: 0 });
+  const [floatingQuestionPanel, setFloatingQuestionPanel] =
+    useState<FloatingQuestionPanelState>({
+      height: 420,
+      isLocked: false,
+      width: 560,
+      x: 24,
+      y: 92,
+    });
   const [selectedColor, setSelectedColor] = useState("#165dff");
   const [selectedSize, setSelectedSize] = useState(4);
   const [selectedTool, setSelectedTool] = useState<WhiteboardTool>("pen");
@@ -255,6 +292,41 @@ export function ConsultationRoom({
     [],
   );
 
+  const clampFloatingQuestionPanel = useCallback(
+    (panel: FloatingQuestionPanelState): FloatingQuestionPanelState => {
+      const board = boardRef.current;
+      const boardWidth = board?.clientWidth ?? window.innerWidth;
+      const boardHeight = board?.clientHeight ?? window.innerHeight;
+      const maxWidth = Math.max(
+        QUESTION_PANEL_MIN_WIDTH,
+        boardWidth - QUESTION_PANEL_PADDING * 2,
+      );
+      const maxHeight = Math.max(
+        QUESTION_PANEL_MIN_HEIGHT,
+        boardHeight - QUESTION_PANEL_PADDING * 2,
+      );
+      const width = Math.min(Math.max(panel.width, QUESTION_PANEL_MIN_WIDTH), maxWidth);
+      const height = Math.min(
+        Math.max(panel.height, QUESTION_PANEL_MIN_HEIGHT),
+        maxHeight,
+      );
+      const maxX = Math.max(QUESTION_PANEL_PADDING, boardWidth - width - QUESTION_PANEL_PADDING);
+      const maxY = Math.max(
+        QUESTION_PANEL_PADDING,
+        boardHeight - height - QUESTION_PANEL_PADDING,
+      );
+
+      return {
+        ...panel,
+        height,
+        width,
+        x: Math.min(Math.max(panel.x, QUESTION_PANEL_PADDING), maxX),
+        y: Math.min(Math.max(panel.y, QUESTION_PANEL_PADDING), maxY),
+      };
+    },
+    [],
+  );
+
   const resizeBoardCanvas = useCallback(() => {
     const board = boardRef.current;
 
@@ -271,9 +343,10 @@ export function ConsultationRoom({
   const queueBoardResize = useCallback(() => {
     window.requestAnimationFrame(() => {
       resizeBoardCanvas();
+      setFloatingQuestionPanel((panel) => clampFloatingQuestionPanel(panel));
       window.setTimeout(resizeBoardCanvas, 120);
     });
-  }, [resizeBoardCanvas]);
+  }, [clampFloatingQuestionPanel, resizeBoardCanvas]);
 
   useEffect(() => {
     const board = boardRef.current;
@@ -436,6 +509,94 @@ export function ConsultationRoom({
     }
   };
 
+  const handleFloatingQuestionPanelPointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+    mode: FloatingQuestionPanelInteraction["mode"],
+  ) => {
+    if (floatingQuestionPanel.isLocked) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    questionPanelInteractionRef.current = {
+      mode,
+      startHeight: floatingQuestionPanel.height,
+      startPointerX: event.clientX,
+      startPointerY: event.clientY,
+      startWidth: floatingQuestionPanel.width,
+      startX: floatingQuestionPanel.x,
+      startY: floatingQuestionPanel.y,
+    };
+  };
+
+  const handleFloatingQuestionPanelPointerMove = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const interaction = questionPanelInteractionRef.current;
+
+    if (!interaction) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const deltaX = event.clientX - interaction.startPointerX;
+    const deltaY = event.clientY - interaction.startPointerY;
+
+    setFloatingQuestionPanel((panel) =>
+      clampFloatingQuestionPanel({
+        ...panel,
+        height:
+          interaction.mode === "resize"
+            ? interaction.startHeight + deltaY
+            : panel.height,
+        width:
+          interaction.mode === "resize"
+            ? interaction.startWidth + deltaX
+            : panel.width,
+        x:
+          interaction.mode === "drag"
+            ? interaction.startX + deltaX
+            : panel.x,
+        y:
+          interaction.mode === "drag"
+            ? interaction.startY + deltaY
+            : panel.y,
+      }),
+    );
+  };
+
+  const handleFloatingQuestionPanelPointerUp = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (!questionPanelInteractionRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    questionPanelInteractionRef.current = null;
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const resetFloatingQuestionPanel = () => {
+    setFloatingQuestionPanel((panel) =>
+      clampFloatingQuestionPanel({
+        ...panel,
+        height: 420,
+        width: 560,
+        x: 24,
+        y: 92,
+      }),
+    );
+  };
+
   const renderToolControls = (compact = false) => (
     <div className={`flex flex-wrap gap-2 ${compact ? "max-w-5xl" : ""}`}>
       {tools.map(([tool, label]) => (
@@ -548,31 +709,10 @@ export function ConsultationRoom({
             trackRef={tutorTrackRef}
           />
 
-          <div className="rounded-2xl bg-white p-5 text-slate-950 shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
-              <div>
-                <p className="font-bold text-blue-700">SPM Mathematics</p>
-                <p className="mt-1 text-sm text-slate-700">
-                  Topic: Quadratic Equations
-                </p>
-              </div>
-              <p className="text-sm text-slate-700">Question: 1 of 5</p>
-            </div>
-            <div className="space-y-4 pt-4">
-              <p className="text-sm">1. Solve the following quadratic equation.</p>
-              <div className="text-center text-2xl font-semibold italic lg:text-3xl">
-                x^2 - 5x + 6 = 0
-              </div>
-              <div className="text-right text-sm">[3 marks]</div>
-              <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm leading-6 text-slate-800">
-                Hint: Find two numbers that multiply to 6 and add to -5.
-              </div>
-              <div className="flex flex-wrap justify-between gap-3">
-                <Button variant="secondary">Previous</Button>
-                <Button>Next Question</Button>
-              </div>
-            </div>
-          </div>
+          <ClassroomDocumentViewer
+            signedUrl={worksheetFileUrl}
+            worksheet={worksheet}
+          />
 
           <ConsultationVideoTile
             label="Student"
@@ -627,6 +767,84 @@ export function ConsultationRoom({
             onPointerUp={handlePointerUp}
             ref={canvasRef}
           />
+          {isBoardFullscreen ? (
+            <div
+              className="absolute z-20 flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+              style={{
+                height: floatingQuestionPanel.height,
+                left: floatingQuestionPanel.x,
+                top: floatingQuestionPanel.y,
+                width: floatingQuestionPanel.width,
+              }}
+            >
+              <div
+                className={`flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-950 px-4 py-3 text-white ${
+                  floatingQuestionPanel.isLocked
+                    ? "cursor-default"
+                    : "cursor-move touch-none"
+                }`}
+                onPointerDown={(event) =>
+                  handleFloatingQuestionPanelPointerDown(event, "drag")
+                }
+                onPointerMove={handleFloatingQuestionPanelPointerMove}
+                onPointerUp={handleFloatingQuestionPanelPointerUp}
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-black">Floating question</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/60">
+                    {floatingQuestionPanel.isLocked
+                      ? "Position locked"
+                      : "Drag header to move"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <button
+                    className="rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/20"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setFloatingQuestionPanel((panel) => ({
+                        ...panel,
+                        isLocked: !panel.isLocked,
+                      }));
+                    }}
+                    type="button"
+                  >
+                    {floatingQuestionPanel.isLocked ? "Unlock" : "Lock"}
+                  </button>
+                  <button
+                    className="rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/20"
+                    disabled={floatingQuestionPanel.isLocked}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      resetFloatingQuestionPanel();
+                    }}
+                    type="button"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <ClassroomDocumentViewer
+                  compact
+                  signedUrl={worksheetFileUrl}
+                  worksheet={worksheet}
+                />
+              </div>
+              {!floatingQuestionPanel.isLocked ? (
+                <div
+                  aria-label="Resize floating question"
+                  className="absolute bottom-2 right-2 h-8 w-8 cursor-nwse-resize rounded-br-2xl rounded-tl-xl border-b-4 border-r-4 border-blue-600 bg-white/80 shadow-lg touch-none"
+                  onPointerDown={(event) =>
+                    handleFloatingQuestionPanelPointerDown(event, "resize")
+                  }
+                  onPointerMove={handleFloatingQuestionPanelPointerMove}
+                  onPointerUp={handleFloatingQuestionPanelPointerUp}
+                  title="Resize floating question"
+                />
+              ) : null}
+            </div>
+          ) : null}
           {isBoardFullscreen ? (
             <div className="absolute inset-x-4 bottom-4 z-10 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
               {renderToolControls(true)}
