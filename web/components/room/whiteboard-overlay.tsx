@@ -23,6 +23,7 @@ const WHITEBOARD_COLORS = [
   "#111827",
   "#165dff",
   "#f97316",
+  "#facc15",
   "#16a34a",
   "#dc2626",
   "#7c3aed",

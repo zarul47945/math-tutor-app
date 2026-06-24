@@ -51,6 +51,8 @@ const PDF_WORKER_SRC = new URL(
 const CONSULTATION_COLORS = [
   "#111827",
   "#dc2626",
+  "#f97316",
+  "#facc15",
   "#165dff",
   "#16a34a",
   "#7c3aed",
