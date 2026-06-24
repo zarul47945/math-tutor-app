@@ -6,8 +6,11 @@ import {
   VideoTrack,
 } from "@livekit/components-react";
 import type { Participant } from "livekit-client";
-import type { PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  ChangeEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { ClassroomDocumentViewer } from "@/components/room/classroom-document-viewer";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +22,15 @@ import type {
 } from "@/lib/livekit/signals";
 import type { LessonWorksheet, LiveKitRole } from "@/lib/types";
 import { formatSeconds } from "@/lib/utils";
+import { validateWorksheetFile } from "@/lib/worksheet-files";
+
+type PdfJsModule = typeof import("pdfjs-dist");
+type PdfDocumentProxy = Awaited<ReturnType<PdfJsModule["getDocument"]>["promise"]>;
+
+const PDF_WORKER_SRC = new URL(
+  "pdfjs-dist/build/pdf.worker.mjs",
+  import.meta.url,
+).toString();
 
 const CONSULTATION_COLORS = [
   "#111827",
@@ -28,32 +40,18 @@ const CONSULTATION_COLORS = [
   "#7c3aed",
 ];
 
-const QUESTION_PANEL_PADDING = 16;
-const QUESTION_PANEL_MIN_HEIGHT = 260;
-const QUESTION_PANEL_MIN_WIDTH = 320;
-
-type FloatingQuestionPanelState = {
-  height: number;
-  isLocked: boolean;
-  width: number;
-  x: number;
-  y: number;
-};
-
-type FloatingQuestionPanelInteraction = {
-  mode: "drag" | "resize";
-  startHeight: number;
-  startPointerX: number;
-  startPointerY: number;
-  startWidth: number;
-  startX: number;
-  startY: number;
-};
-
 function isTrackReference(
   trackRef: TrackReferenceOrPlaceholder | null,
 ): trackRef is TrackReference {
   return trackRef !== null && trackRef.publication !== undefined;
+}
+
+function isPdfWorksheet(worksheet: LessonWorksheet | null) {
+  return worksheet?.file_mime_type === "application/pdf";
+}
+
+function isImageWorksheet(worksheet: LessonWorksheet | null) {
+  return worksheet?.file_mime_type?.startsWith("image/") ?? false;
 }
 
 function drawStroke(
@@ -203,6 +201,7 @@ export function ConsultationRoom({
   onToggleMicrophone,
   onUndoWhiteboard,
   onUploadWorksheetFile,
+  onWorksheetPageChange,
   participantCount,
   remoteCameraTrackByIdentity,
   remoteParticipants,
@@ -212,6 +211,7 @@ export function ConsultationRoom({
   whiteboardStrokes,
   worksheet,
   worksheetFileUrl,
+  worksheetPageNumber,
   worksheetUploadPending,
 }: {
   canUndo: boolean;
@@ -230,6 +230,7 @@ export function ConsultationRoom({
   onToggleMicrophone: () => void;
   onUndoWhiteboard: () => void;
   onUploadWorksheetFile?: (file: File) => void;
+  onWorksheetPageChange: (pageNumber: number) => void;
   participantCount: number;
   remoteCameraTrackByIdentity: Map<string, TrackReferenceOrPlaceholder>;
   remoteParticipants: Participant[];
@@ -239,23 +240,23 @@ export function ConsultationRoom({
   whiteboardStrokes: WhiteboardStroke[];
   worksheet: LessonWorksheet | null;
   worksheetFileUrl: string | null;
+  worksheetPageNumber: number;
   worksheetUploadPending: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
+  const worksheetSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const worksheetPdfCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const worksheetPdfRenderTaskRef = useRef<{ cancel: () => void } | null>(null);
   const currentStrokeRef = useRef<WhiteboardStroke | null>(null);
-  const questionPanelInteractionRef =
-    useRef<FloatingQuestionPanelInteraction | null>(null);
+  const uploadInputId = useId();
   const [activePoints, setActivePoints] = useState<WhiteboardPoint[]>([]);
   const [canvasSize, setCanvasSize] = useState({ height: 0, width: 0 });
-  const [floatingQuestionPanel, setFloatingQuestionPanel] =
-    useState<FloatingQuestionPanelState>({
-      height: 420,
-      isLocked: false,
-      width: 560,
-      x: 24,
-      y: 92,
-    });
+  const [isWorksheetPdfLoading, setIsWorksheetPdfLoading] = useState(false);
+  const [worksheetPageCount, setWorksheetPageCount] = useState(0);
+  const [worksheetPdfDocument, setWorksheetPdfDocument] =
+    useState<PdfDocumentProxy | null>(null);
+  const [worksheetPdfError, setWorksheetPdfError] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState("#165dff");
   const [selectedSize, setSelectedSize] = useState(4);
   const [selectedTool, setSelectedTool] = useState<WhiteboardTool>("pen");
@@ -280,9 +281,16 @@ export function ConsultationRoom({
         : null;
   const currentStrokeColor = selectedTool === "eraser" ? "#ffffff" : selectedColor;
   const canClear = whiteboardStrokes.length > 0;
+  const isWorksheetPdf = isPdfWorksheet(worksheet);
+  const isWorksheetImage = isImageWorksheet(worksheet);
+  const canUploadWorksheet = role === "teacher" && Boolean(onUploadWorksheetFile);
+  const uploadLabel = worksheet?.file_path ? "Replace question" : "Upload question";
   const boardClassName = isBoardFullscreen
     ? "relative h-screen w-screen overflow-hidden rounded-none bg-white shadow-2xl"
     : "relative min-h-[58vh] overflow-hidden rounded-2xl bg-white shadow-2xl lg:min-h-[62vh]";
+  const worksheetSurfaceClassName = isBoardFullscreen
+    ? "absolute inset-x-4 bottom-28 top-20 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-inner"
+    : "absolute inset-x-4 bottom-4 top-20 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-inner";
 
   const tools = useMemo(
     () =>
@@ -296,72 +304,36 @@ export function ConsultationRoom({
     [],
   );
 
-  const clampFloatingQuestionPanel = useCallback(
-    (panel: FloatingQuestionPanelState): FloatingQuestionPanelState => {
-      const board = boardRef.current;
-      const boardWidth = board?.clientWidth ?? window.innerWidth;
-      const boardHeight = board?.clientHeight ?? window.innerHeight;
-      const maxWidth = Math.max(
-        QUESTION_PANEL_MIN_WIDTH,
-        boardWidth - QUESTION_PANEL_PADDING * 2,
-      );
-      const maxHeight = Math.max(
-        QUESTION_PANEL_MIN_HEIGHT,
-        boardHeight - QUESTION_PANEL_PADDING * 2,
-      );
-      const width = Math.min(Math.max(panel.width, QUESTION_PANEL_MIN_WIDTH), maxWidth);
-      const height = Math.min(
-        Math.max(panel.height, QUESTION_PANEL_MIN_HEIGHT),
-        maxHeight,
-      );
-      const maxX = Math.max(QUESTION_PANEL_PADDING, boardWidth - width - QUESTION_PANEL_PADDING);
-      const maxY = Math.max(
-        QUESTION_PANEL_PADDING,
-        boardHeight - height - QUESTION_PANEL_PADDING,
-      );
-
-      return {
-        ...panel,
-        height,
-        width,
-        x: Math.min(Math.max(panel.x, QUESTION_PANEL_PADDING), maxX),
-        y: Math.min(Math.max(panel.y, QUESTION_PANEL_PADDING), maxY),
-      };
-    },
-    [],
-  );
-
   const resizeBoardCanvas = useCallback(() => {
-    const board = boardRef.current;
+    const surface = worksheetSurfaceRef.current;
 
-    if (!board) {
+    if (!surface) {
       return;
     }
 
     setCanvasSize({
-      height: board.clientHeight,
-      width: board.clientWidth,
+      height: surface.clientHeight,
+      width: surface.clientWidth,
     });
   }, []);
 
   const queueBoardResize = useCallback(() => {
     window.requestAnimationFrame(() => {
       resizeBoardCanvas();
-      setFloatingQuestionPanel((panel) => clampFloatingQuestionPanel(panel));
       window.setTimeout(resizeBoardCanvas, 120);
     });
-  }, [clampFloatingQuestionPanel, resizeBoardCanvas]);
+  }, [resizeBoardCanvas]);
 
   useEffect(() => {
-    const board = boardRef.current;
+    const surface = worksheetSurfaceRef.current;
 
-    if (!board) {
+    if (!surface) {
       return;
     }
 
     resizeBoardCanvas();
     const observer = new ResizeObserver(resizeBoardCanvas);
-    observer.observe(board);
+    observer.observe(surface);
 
     return () => observer.disconnect();
   }, [resizeBoardCanvas]);
@@ -384,6 +356,155 @@ export function ConsultationRoom({
       document.removeEventListener("fullscreenchange", syncFullscreenState);
     };
   }, [queueBoardResize]);
+
+  useEffect(() => {
+    const sourceUrl = isWorksheetPdf && worksheetFileUrl ? worksheetFileUrl : "";
+
+    worksheetPdfRenderTaskRef.current?.cancel();
+
+    if (!sourceUrl) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadPdf() {
+      setWorksheetPdfError(null);
+      setIsWorksheetPdfLoading(true);
+
+      try {
+        const pdfjs = await import("pdfjs-dist");
+        pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER_SRC;
+
+        const loadingTask = pdfjs.getDocument({ url: sourceUrl });
+        const loadedDocument = await loadingTask.promise;
+
+        if (!isMounted) {
+          return;
+        }
+
+        setWorksheetPdfDocument(loadedDocument);
+        setWorksheetPageCount(loadedDocument.numPages);
+
+        if (worksheetPageNumber > loadedDocument.numPages) {
+          onWorksheetPageChange(1);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setWorksheetPdfError(
+            error instanceof Error
+              ? error.message
+              : "Unable to render this PDF on the whiteboard.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsWorksheetPdfLoading(false);
+        }
+      }
+    }
+
+    void loadPdf();
+
+    return () => {
+      isMounted = false;
+      worksheetPdfRenderTaskRef.current?.cancel();
+    };
+  }, [
+    isWorksheetPdf,
+    onWorksheetPageChange,
+    worksheetFileUrl,
+    worksheetPageNumber,
+  ]);
+
+  const renderWorksheetPdfPage = useCallback(async () => {
+    const canvas = worksheetPdfCanvasRef.current;
+    const surface = worksheetSurfaceRef.current;
+
+    if (!canvas || !surface || !worksheetPdfDocument) {
+      return;
+    }
+
+    worksheetPdfRenderTaskRef.current?.cancel();
+    setWorksheetPdfError(null);
+    setIsWorksheetPdfLoading(true);
+
+    try {
+      const safePageNumber = Math.max(
+        1,
+        Math.min(worksheetPageNumber, worksheetPdfDocument.numPages),
+      );
+      const page = await worksheetPdfDocument.getPage(safePageNumber);
+      const unscaledViewport = page.getViewport({ scale: 1 });
+      const maxWidth = Math.max(surface.clientWidth - 32, 320);
+      const maxHeight = Math.max(surface.clientHeight - 32, 240);
+      const fitScale = Math.min(
+        maxWidth / unscaledViewport.width,
+        maxHeight / unscaledViewport.height,
+      );
+      const viewport = page.getViewport({ scale: Math.max(0.1, fitScale) });
+      const pixelRatio = window.devicePixelRatio || 1;
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        throw new Error("This browser cannot render the PDF worksheet.");
+      }
+
+      canvas.width = Math.floor(viewport.width * pixelRatio);
+      canvas.height = Math.floor(viewport.height * pixelRatio);
+      canvas.style.width = `${viewport.width}px`;
+      canvas.style.height = `${viewport.height}px`;
+
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      context.clearRect(0, 0, viewport.width, viewport.height);
+
+      const renderTask = page.render({
+        canvas,
+        canvasContext: context,
+        viewport,
+      });
+
+      worksheetPdfRenderTaskRef.current = renderTask;
+      await renderTask.promise;
+    } catch (error) {
+      if (error instanceof Error && error.name === "RenderingCancelledException") {
+        return;
+      }
+
+      setWorksheetPdfError(
+        error instanceof Error
+          ? error.message
+          : "Unable to render this PDF page on the whiteboard.",
+      );
+    } finally {
+      setIsWorksheetPdfLoading(false);
+    }
+  }, [worksheetPageNumber, worksheetPdfDocument]);
+
+  useEffect(() => {
+    if (!worksheetPdfDocument) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      void renderWorksheetPdfPage();
+    });
+    const surface = worksheetSurfaceRef.current;
+
+    if (!surface) {
+      return () => window.cancelAnimationFrame(frameId);
+    }
+
+    const observer = new ResizeObserver(() => {
+      void renderWorksheetPdfPage();
+    });
+    observer.observe(surface);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      observer.disconnect();
+    };
+  }, [renderWorksheetPdfPage, worksheetPdfDocument]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -410,6 +531,26 @@ export function ConsultationRoom({
       drawStroke(context, canvas.height, currentStrokeRef.current, canvas.width);
     }
   }, [activePoints, canvasSize.height, canvasSize.width, whiteboardStrokes]);
+
+  const handleBoardUploadChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file || !onUploadWorksheetFile) {
+      return;
+    }
+
+    try {
+      validateWorksheetFile(file);
+      onUploadWorksheetFile(file);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Please upload a PNG, JPEG, or PDF worksheet file.",
+      );
+    }
+  };
 
   const makePoint = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -511,94 +652,6 @@ export function ConsultationRoom({
       );
       queueBoardResize();
     }
-  };
-
-  const handleFloatingQuestionPanelPointerDown = (
-    event: ReactPointerEvent<HTMLDivElement>,
-    mode: FloatingQuestionPanelInteraction["mode"],
-  ) => {
-    if (floatingQuestionPanel.isLocked) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    questionPanelInteractionRef.current = {
-      mode,
-      startHeight: floatingQuestionPanel.height,
-      startPointerX: event.clientX,
-      startPointerY: event.clientY,
-      startWidth: floatingQuestionPanel.width,
-      startX: floatingQuestionPanel.x,
-      startY: floatingQuestionPanel.y,
-    };
-  };
-
-  const handleFloatingQuestionPanelPointerMove = (
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) => {
-    const interaction = questionPanelInteractionRef.current;
-
-    if (!interaction) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    const deltaX = event.clientX - interaction.startPointerX;
-    const deltaY = event.clientY - interaction.startPointerY;
-
-    setFloatingQuestionPanel((panel) =>
-      clampFloatingQuestionPanel({
-        ...panel,
-        height:
-          interaction.mode === "resize"
-            ? interaction.startHeight + deltaY
-            : panel.height,
-        width:
-          interaction.mode === "resize"
-            ? interaction.startWidth + deltaX
-            : panel.width,
-        x:
-          interaction.mode === "drag"
-            ? interaction.startX + deltaX
-            : panel.x,
-        y:
-          interaction.mode === "drag"
-            ? interaction.startY + deltaY
-            : panel.y,
-      }),
-    );
-  };
-
-  const handleFloatingQuestionPanelPointerUp = (
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) => {
-    if (!questionPanelInteractionRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    questionPanelInteractionRef.current = null;
-
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  };
-
-  const resetFloatingQuestionPanel = () => {
-    setFloatingQuestionPanel((panel) =>
-      clampFloatingQuestionPanel({
-        ...panel,
-        height: 420,
-        width: 560,
-        x: 24,
-        y: 92,
-      }),
-    );
   };
 
   const renderToolControls = (compact = false) => (
@@ -732,17 +785,57 @@ export function ConsultationRoom({
         <section
           className={boardClassName}
           ref={boardRef}
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, rgba(15,23,42,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(15,23,42,0.06) 1px, transparent 1px)",
-            backgroundSize: "28px 28px",
-          }}
         >
           <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex flex-wrap items-center justify-between gap-3">
             <div className="rounded-2xl bg-white/90 px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-950 shadow-lg backdrop-blur">
-              Consultation whiteboard
+              Question whiteboard
             </div>
             <div className="pointer-events-auto flex flex-wrap gap-2">
+              {canUploadWorksheet ? (
+                <>
+                  <label
+                    className={`inline-flex min-h-12 cursor-pointer items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 ${
+                      worksheetUploadPending ? "pointer-events-none opacity-60" : ""
+                    }`}
+                    htmlFor={uploadInputId}
+                  >
+                    {worksheetUploadPending ? "Uploading..." : uploadLabel}
+                  </label>
+                  <input
+                    accept="image/png,image/jpeg,application/pdf,.png,.jpg,.jpeg,.pdf"
+                    className="sr-only"
+                    disabled={worksheetUploadPending}
+                    id={uploadInputId}
+                    onChange={handleBoardUploadChange}
+                    type="file"
+                  />
+                </>
+              ) : null}
+              {isWorksheetPdf && worksheetFileUrl && worksheetPageCount > 0 ? (
+                <div className="flex items-center gap-2 rounded-xl bg-white/90 px-2 py-1 shadow-lg">
+                  {role === "teacher" ? (
+                    <Button
+                      disabled={worksheetPageNumber <= 1}
+                      onClick={() => onWorksheetPageChange(worksheetPageNumber - 1)}
+                      variant="secondary"
+                    >
+                      Prev page
+                    </Button>
+                  ) : null}
+                  <span className="px-2 text-sm font-bold text-slate-700">
+                    Page {worksheetPageNumber} / {worksheetPageCount}
+                  </span>
+                  {role === "teacher" ? (
+                    <Button
+                      disabled={worksheetPageNumber >= worksheetPageCount}
+                      onClick={() => onWorksheetPageChange(worksheetPageNumber + 1)}
+                      variant="secondary"
+                    >
+                      Next page
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
               <Button onClick={onUndoWhiteboard} disabled={!canUndo} variant="secondary">
                 Undo
               </Button>
@@ -766,95 +859,68 @@ export function ConsultationRoom({
               {fullscreenErrorMessage}
             </div>
           ) : null}
-          <canvas
-            className="absolute inset-0 h-full w-full cursor-crosshair touch-none"
-            onPointerDown={handlePointerDown}
-            onPointerLeave={finishStroke}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            ref={canvasRef}
-          />
-          {isBoardFullscreen ? (
-            <div
-              className="absolute z-20 flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
-              style={{
-                height: floatingQuestionPanel.height,
-                left: floatingQuestionPanel.x,
-                top: floatingQuestionPanel.y,
-                width: floatingQuestionPanel.width,
-              }}
-            >
-              <div
-                className={`flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-950 px-4 py-3 text-white ${
-                  floatingQuestionPanel.isLocked
-                    ? "cursor-default"
-                    : "cursor-move touch-none"
-                }`}
-                onPointerDown={(event) =>
-                  handleFloatingQuestionPanelPointerDown(event, "drag")
-                }
-                onPointerMove={handleFloatingQuestionPanelPointerMove}
-                onPointerUp={handleFloatingQuestionPanelPointerUp}
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black">Floating question</p>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/60">
-                    {floatingQuestionPanel.isLocked
-                      ? "Position locked"
-                      : "Drag header to move"}
-                  </p>
+          <div
+            className={worksheetSurfaceClassName}
+            ref={worksheetSurfaceRef}
+            style={{
+              backgroundImage:
+                "linear-gradient(to right, rgba(15,23,42,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(15,23,42,0.06) 1px, transparent 1px)",
+              backgroundSize: "28px 28px",
+            }}
+          >
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70">
+              {!worksheet?.file_path ? (
+                <div className="max-w-md rounded-2xl border border-dashed border-blue-300 bg-blue-50 px-5 py-4 text-center text-sm font-semibold text-slate-700">
+                  {role === "teacher"
+                    ? "Upload a PNG, JPEG, or PDF question to turn this board into a writable worksheet."
+                    : "Waiting for the teacher to upload a question page."}
                 </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  <button
-                    className="rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/20"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setFloatingQuestionPanel((panel) => ({
-                        ...panel,
-                        isLocked: !panel.isLocked,
-                      }));
-                    }}
-                    type="button"
-                  >
-                    {floatingQuestionPanel.isLocked ? "Unlock" : "Lock"}
-                  </button>
-                  <button
-                    className="rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/20"
-                    disabled={floatingQuestionPanel.isLocked}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      resetFloatingQuestionPanel();
-                    }}
-                    type="button"
-                  >
-                    Reset
-                  </button>
+              ) : !worksheetFileUrl ? (
+                <p className="rounded-2xl bg-white px-5 py-4 text-sm font-semibold text-slate-500 shadow-lg">
+                  Preparing question page...
+                </p>
+              ) : isWorksheetImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt={worksheet.file_name ?? "Uploaded question page"}
+                  className="h-full w-full object-contain"
+                  src={worksheetFileUrl}
+                />
+              ) : isWorksheetPdf ? (
+                <canvas
+                  className="max-h-full max-w-full rounded-lg bg-white shadow-lg"
+                  ref={worksheetPdfCanvasRef}
+                />
+              ) : (
+                <a
+                  className="pointer-events-auto rounded-2xl bg-white px-5 py-4 text-sm font-bold text-blue-700 underline shadow-lg"
+                  href={worksheetFileUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Open uploaded question file
+                </a>
+              )}
+              {isWorksheetPdf && isWorksheetPdfLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-semibold text-slate-500">
+                  Rendering question page...
                 </div>
-              </div>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <ClassroomDocumentViewer
-                  canUpload={role === "teacher"}
-                  compact
-                  isUploading={worksheetUploadPending}
-                  onUploadFile={onUploadWorksheetFile}
-                  signedUrl={worksheetFileUrl}
-                  worksheet={worksheet}
-                />
-              </div>
-              {!floatingQuestionPanel.isLocked ? (
-                <div
-                  aria-label="Resize floating question"
-                  className="absolute bottom-2 right-2 h-8 w-8 cursor-nwse-resize rounded-br-2xl rounded-tl-xl border-b-4 border-r-4 border-blue-600 bg-white/80 shadow-lg touch-none"
-                  onPointerDown={(event) =>
-                    handleFloatingQuestionPanelPointerDown(event, "resize")
-                  }
-                  onPointerMove={handleFloatingQuestionPanelPointerMove}
-                  onPointerUp={handleFloatingQuestionPanelPointerUp}
-                  title="Resize floating question"
-                />
+              ) : null}
+              {isWorksheetPdf && worksheetPdfError ? (
+                <div className="absolute inset-x-6 bottom-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+                  {worksheetPdfError}
+                </div>
               ) : null}
             </div>
-          ) : null}
+            <canvas
+              className="absolute inset-0 z-10 h-full w-full cursor-crosshair touch-none"
+              onPointerDown={handlePointerDown}
+              onPointerLeave={finishStroke}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              ref={canvasRef}
+            />
+          </div>
           {isBoardFullscreen ? (
             <div className="absolute inset-x-4 bottom-4 z-10 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
               {renderToolControls(true)}

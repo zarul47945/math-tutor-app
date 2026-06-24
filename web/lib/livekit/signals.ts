@@ -45,6 +45,11 @@ export type RoomSignal =
       by: string;
     }
   | {
+      type: "worksheet.page";
+      by: string;
+      pageNumber: number;
+    }
+  | {
       type: "whiteboard.stroke";
       stroke: WhiteboardStroke;
     }

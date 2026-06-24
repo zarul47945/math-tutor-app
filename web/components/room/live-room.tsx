@@ -374,6 +374,7 @@ function RoomExperience({
     null,
   );
   const [worksheetFileUrl, setWorksheetFileUrl] = useState<string | null>(null);
+  const [worksheetPageNumber, setWorksheetPageNumber] = useState(1);
   const [sessionState, setSessionState] = useState(
     withLessonMode(initialRoomState, lessonMode),
   );
@@ -544,6 +545,8 @@ function RoomExperience({
     }
 
     if (signal.type === "worksheet.updated") {
+      setWorksheetPageNumber(1);
+      setWhiteboardStrokes([]);
       void loadLessonWorksheet().catch((worksheetError) => {
         setFeedback(
           worksheetError instanceof Error
@@ -551,6 +554,12 @@ function RoomExperience({
             : "Unable to refresh the lesson worksheet right now.",
         );
       });
+      return;
+    }
+
+    if (signal.type === "worksheet.page") {
+      setWorksheetPageNumber(Math.max(1, signal.pageNumber));
+      setWhiteboardStrokes([]);
       return;
     }
 
@@ -827,7 +836,7 @@ function RoomExperience({
     };
   }, [role, sessionId, supabase]);
 
-  const syncRoomSignal = async (signal: RoomSignal) => {
+  const syncRoomSignal = useCallback(async (signal: RoomSignal) => {
     if (connectionState !== "connected") {
       return;
     }
@@ -844,7 +853,26 @@ function RoomExperience({
           : "Unable to sync this room action to the other participant.",
       );
     }
-  };
+  }, [connectionState, send]);
+
+  const handleConsultationWorksheetPageChange = useCallback(
+    (pageNumber: number) => {
+      const nextPageNumber = Math.max(1, pageNumber);
+
+      setWorksheetPageNumber(nextPageNumber);
+      setWhiteboardStrokes([]);
+      void syncRoomSignal({
+        by: role,
+        pageNumber: nextPageNumber,
+        type: "worksheet.page",
+      });
+      void syncRoomSignal({
+        by: role,
+        type: "whiteboard.clear",
+      });
+    },
+    [role, syncRoomSignal],
+  );
 
   const handleConsultationWorksheetUpload = async (file: File) => {
     if (role !== "teacher" || isWorksheetUploadPending) {
@@ -887,9 +915,15 @@ function RoomExperience({
       }
 
       await loadLessonWorksheet();
+      setWorksheetPageNumber(1);
+      setWhiteboardStrokes([]);
       await syncRoomSignal({
         by: role,
         type: "worksheet.updated",
+      });
+      await syncRoomSignal({
+        by: role,
+        type: "whiteboard.clear",
       });
       setFeedback("Question uploaded. The classroom preview has been updated.");
     } catch (uploadError) {
@@ -1233,6 +1267,7 @@ function RoomExperience({
         onToggleMicrophone={handleToggleMicrophone}
         onUndoWhiteboard={handleUndoWhiteboard}
         onUploadWorksheetFile={handleConsultationWorksheetUpload}
+        onWorksheetPageChange={handleConsultationWorksheetPageChange}
         participantCount={participants.length}
         remoteCameraTrackByIdentity={remoteCameraTrackByIdentity}
         remoteParticipants={remoteParticipants}
@@ -1242,6 +1277,7 @@ function RoomExperience({
         whiteboardStrokes={whiteboardStrokes}
         worksheet={lessonWorksheet}
         worksheetFileUrl={worksheetFileUrl}
+        worksheetPageNumber={worksheetPageNumber}
         worksheetUploadPending={isWorksheetUploadPending}
       />
     );
