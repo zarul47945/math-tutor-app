@@ -309,23 +309,25 @@ export function ConsultationRoom({
       : isWorksheetPdf && worksheetPdfPageSize?.key === worksheetPageKey
         ? worksheetPdfPageSize
         : null;
-  const worksheetContentSize = useMemo(() => {
-    const availableWidth = Math.max((worksheetSurfaceSize.width || 900) - 32, 320);
-    const availableHeight = Math.max(
-      (worksheetSurfaceSize.height || 620) - 32,
-      240,
-    );
+  const worksheetAvailableSize = useMemo(
+    () => ({
+      height: Math.max((worksheetSurfaceSize.height || 620) - 32, 240),
+      width: Math.max((worksheetSurfaceSize.width || 900) - 32, 320),
+    }),
+    [worksheetSurfaceSize.height, worksheetSurfaceSize.width],
+  );
 
+  const worksheetQuestionSize = useMemo(() => {
     if (!worksheetDocumentSize?.width || !worksheetDocumentSize.height) {
       return {
-        height: Math.round(availableHeight),
-        width: Math.round(availableWidth),
+        height: Math.round(worksheetAvailableSize.height * questionZoom),
+        width: Math.round(worksheetAvailableSize.width * questionZoom),
       };
     }
 
     const fitScale = Math.min(
-      availableWidth / worksheetDocumentSize.width,
-      availableHeight / worksheetDocumentSize.height,
+      worksheetAvailableSize.width / worksheetDocumentSize.width,
+      worksheetAvailableSize.height / worksheetDocumentSize.height,
     );
 
     return {
@@ -338,11 +340,25 @@ export function ConsultationRoom({
         Math.round(worksheetDocumentSize.width * fitScale * questionZoom),
       ),
     };
+  }, [questionZoom, worksheetAvailableSize, worksheetDocumentSize]);
+
+  const worksheetContentSize = useMemo(() => {
+    // The writable paper is at least the visible board size, so blank side space is drawable.
+    return {
+      height: Math.max(
+        Math.round(worksheetAvailableSize.height * questionZoom),
+        worksheetQuestionSize.height,
+      ),
+      width: Math.max(
+        Math.round(worksheetAvailableSize.width * questionZoom),
+        worksheetQuestionSize.width,
+      ),
+    };
   }, [
     questionZoom,
-    worksheetDocumentSize,
-    worksheetSurfaceSize.height,
-    worksheetSurfaceSize.width,
+    worksheetAvailableSize,
+    worksheetQuestionSize.height,
+    worksheetQuestionSize.width,
   ]);
   const boardClassName = isBoardFullscreen
     ? "relative h-screen w-screen overflow-hidden rounded-none bg-white shadow-2xl"
@@ -546,7 +562,7 @@ export function ConsultationRoom({
       const page = await worksheetPdfDocument.getPage(safePageNumber);
       const unscaledViewport = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({
-        scale: Math.max(0.1, worksheetContentSize.width / unscaledViewport.width),
+        scale: Math.max(0.1, worksheetQuestionSize.width / unscaledViewport.width),
       });
       const pixelRatio = window.devicePixelRatio || 1;
       const context = canvas.getContext("2d");
@@ -557,8 +573,8 @@ export function ConsultationRoom({
 
       canvas.width = Math.floor(viewport.width * pixelRatio);
       canvas.height = Math.floor(viewport.height * pixelRatio);
-      canvas.style.width = `${worksheetContentSize.width}px`;
-      canvas.style.height = `${worksheetContentSize.height}px`;
+      canvas.style.width = `${worksheetQuestionSize.width}px`;
+      canvas.style.height = `${worksheetQuestionSize.height}px`;
 
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       context.clearRect(0, 0, viewport.width, viewport.height);
@@ -585,9 +601,9 @@ export function ConsultationRoom({
       setIsWorksheetPdfLoading(false);
     }
   }, [
-    worksheetContentSize.height,
-    worksheetContentSize.width,
     worksheetPageNumber,
+    worksheetQuestionSize.height,
+    worksheetQuestionSize.width,
     worksheetPdfDocument,
   ]);
 
@@ -1037,11 +1053,14 @@ export function ConsultationRoom({
               <div
                 className="relative shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
                 style={{
+                  backgroundImage:
+                    "linear-gradient(to right, rgba(15,23,42,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(15,23,42,0.06) 1px, transparent 1px)",
+                  backgroundSize: "28px 28px",
                   height: worksheetContentSize.height,
                   width: worksheetContentSize.width,
                 }}
               >
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white">
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   {!worksheet?.file_path ? (
                     <div className="mx-6 max-w-md rounded-2xl border border-dashed border-blue-300 bg-blue-50 px-5 py-4 text-center text-sm font-semibold text-slate-700">
                       {role === "teacher"
@@ -1056,7 +1075,7 @@ export function ConsultationRoom({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       alt={worksheet.file_name ?? "Uploaded question page"}
-                      className="h-full w-full object-contain"
+                      className="rounded-lg bg-white object-contain shadow-lg"
                       onLoad={(event) => {
                         setImageNaturalSize({
                           height: event.currentTarget.naturalHeight,
@@ -1064,12 +1083,20 @@ export function ConsultationRoom({
                           width: event.currentTarget.naturalWidth,
                         });
                       }}
+                      style={{
+                        height: worksheetQuestionSize.height,
+                        width: worksheetQuestionSize.width,
+                      }}
                       src={worksheetFileUrl}
                     />
                   ) : isWorksheetPdf ? (
                     <canvas
-                      className="h-full w-full bg-white"
+                      className="rounded-lg bg-white shadow-lg"
                       ref={worksheetPdfCanvasRef}
+                      style={{
+                        height: worksheetQuestionSize.height,
+                        width: worksheetQuestionSize.width,
+                      }}
                     />
                   ) : (
                     <a
