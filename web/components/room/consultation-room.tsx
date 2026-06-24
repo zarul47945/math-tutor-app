@@ -7,7 +7,7 @@ import {
 } from "@livekit/components-react";
 import type { Participant } from "livekit-client";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -218,7 +218,10 @@ export function ConsultationRoom({
   const [selectedColor, setSelectedColor] = useState("#165dff");
   const [selectedSize, setSelectedSize] = useState(4);
   const [selectedTool, setSelectedTool] = useState<WhiteboardTool>("pen");
-  const [isBoardFullMode, setIsBoardFullMode] = useState(false);
+  const [isBoardFullscreen, setIsBoardFullscreen] = useState(false);
+  const [fullscreenErrorMessage, setFullscreenErrorMessage] = useState<
+    string | null
+  >(null);
   const remoteParticipant = remoteParticipants[0] ?? null;
   const tutorParticipant = role === "teacher" ? localParticipant : remoteParticipant;
   const studentParticipant = role === "student" ? localParticipant : remoteParticipant;
@@ -236,8 +239,8 @@ export function ConsultationRoom({
         : null;
   const currentStrokeColor = selectedTool === "eraser" ? "#ffffff" : selectedColor;
   const canClear = whiteboardStrokes.length > 0;
-  const boardClassName = isBoardFullMode
-    ? "fixed inset-0 z-50 overflow-hidden rounded-none bg-white shadow-2xl"
+  const boardClassName = isBoardFullscreen
+    ? "relative h-screen w-screen overflow-hidden rounded-none bg-white shadow-2xl"
     : "relative min-h-[58vh] overflow-hidden rounded-2xl bg-white shadow-2xl lg:min-h-[62vh]";
 
   const tools = useMemo(
@@ -252,6 +255,26 @@ export function ConsultationRoom({
     [],
   );
 
+  const resizeBoardCanvas = useCallback(() => {
+    const board = boardRef.current;
+
+    if (!board) {
+      return;
+    }
+
+    setCanvasSize({
+      height: board.clientHeight,
+      width: board.clientWidth,
+    });
+  }, []);
+
+  const queueBoardResize = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      resizeBoardCanvas();
+      window.setTimeout(resizeBoardCanvas, 120);
+    });
+  }, [resizeBoardCanvas]);
+
   useEffect(() => {
     const board = boardRef.current;
 
@@ -259,40 +282,31 @@ export function ConsultationRoom({
       return;
     }
 
-    const syncSize = () => {
-      setCanvasSize({
-        height: board.clientHeight,
-        width: board.clientWidth,
-      });
-    };
-
-    syncSize();
-    const observer = new ResizeObserver(syncSize);
+    resizeBoardCanvas();
+    const observer = new ResizeObserver(resizeBoardCanvas);
     observer.observe(board);
 
     return () => observer.disconnect();
-  }, []);
+  }, [resizeBoardCanvas]);
 
   useEffect(() => {
-    if (!isBoardFullMode) {
-      return;
-    }
+    const syncFullscreenState = () => {
+      const isFullscreen = document.fullscreenElement === boardRef.current;
 
-    const originalOverflow = document.body.style.overflow;
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsBoardFullMode(false);
+      setIsBoardFullscreen(isFullscreen);
+      if (isFullscreen) {
+        setFullscreenErrorMessage(null);
       }
+      queueBoardResize();
     };
 
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleEscape);
+    syncFullscreenState();
+    document.addEventListener("fullscreenchange", syncFullscreenState);
 
     return () => {
-      document.body.style.overflow = originalOverflow;
-      window.removeEventListener("keydown", handleEscape);
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
     };
-  }, [isBoardFullMode]);
+  }, [queueBoardResize]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -395,6 +409,33 @@ export function ConsultationRoom({
     event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
+  const handleToggleBrowserFullscreen = async () => {
+    const board = boardRef.current;
+
+    if (!board) {
+      return;
+    }
+
+    setFullscreenErrorMessage(null);
+
+    try {
+      if (document.fullscreenElement === board) {
+        await document.exitFullscreen();
+      } else if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await board.requestFullscreen();
+      }
+
+      queueBoardResize();
+    } catch {
+      setFullscreenErrorMessage(
+        "Could not open browser fullscreen. Please press F11 manually.",
+      );
+      queueBoardResize();
+    }
+  };
+
   const renderToolControls = (compact = false) => (
     <div className={`flex flex-wrap gap-2 ${compact ? "max-w-5xl" : ""}`}>
       {tools.map(([tool, label]) => (
@@ -452,13 +493,12 @@ export function ConsultationRoom({
       <Button disabled={!canClear} onClick={onClearWhiteboard} variant="secondary">
         Clear All
       </Button>
-      {compact ? (
-        <Button onClick={() => setIsBoardFullMode(false)}>Exit full mode</Button>
-      ) : (
-        <Button onClick={() => setIsBoardFullMode(true)} variant="secondary">
-          Full board
-        </Button>
-      )}
+      <Button
+        onClick={handleToggleBrowserFullscreen}
+        variant={isBoardFullscreen ? "primary" : "secondary"}
+      >
+        {isBoardFullscreen ? "Exit full screen" : "Full screen"}
+      </Button>
     </div>
   );
 
@@ -567,13 +607,18 @@ export function ConsultationRoom({
                 Clear board
               </Button>
               <Button
-                onClick={() => setIsBoardFullMode((current) => !current)}
-                variant={isBoardFullMode ? "primary" : "secondary"}
+                onClick={handleToggleBrowserFullscreen}
+                variant={isBoardFullscreen ? "primary" : "secondary"}
               >
-                {isBoardFullMode ? "Exit full mode" : "Full board"}
+                {isBoardFullscreen ? "Exit full screen" : "Full screen"}
               </Button>
             </div>
           </div>
+          {fullscreenErrorMessage ? (
+            <div className="absolute left-4 top-24 z-10 max-w-md rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 shadow-lg">
+              {fullscreenErrorMessage}
+            </div>
+          ) : null}
           <canvas
             className="absolute inset-0 h-full w-full cursor-crosshair touch-none"
             onPointerDown={handlePointerDown}
@@ -582,7 +627,7 @@ export function ConsultationRoom({
             onPointerUp={handlePointerUp}
             ref={canvasRef}
           />
-          {isBoardFullMode ? (
+          {isBoardFullscreen ? (
             <div className="absolute inset-x-4 bottom-4 z-10 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
               {renderToolControls(true)}
             </div>
