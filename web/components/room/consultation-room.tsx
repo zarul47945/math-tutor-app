@@ -36,6 +36,13 @@ type DocumentSize = {
 
 type QuestionPosition = "center" | "left" | "right";
 
+type PanInteraction = {
+  pointerX: number;
+  pointerY: number;
+  scrollLeft: number;
+  scrollTop: number;
+};
+
 const PDF_WORKER_SRC = new URL(
   "pdfjs-dist/build/pdf.worker.mjs",
   import.meta.url,
@@ -259,6 +266,7 @@ export function ConsultationRoom({
   const worksheetPdfCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const worksheetPdfRenderTaskRef = useRef<{ cancel: () => void } | null>(null);
   const currentStrokeRef = useRef<WhiteboardStroke | null>(null);
+  const panInteractionRef = useRef<PanInteraction | null>(null);
   const uploadInputId = useId();
   const [activePoints, setActivePoints] = useState<WhiteboardPoint[]>([]);
   const [imageNaturalSize, setImageNaturalSize] = useState<DocumentSize | null>(
@@ -268,6 +276,7 @@ export function ConsultationRoom({
   const [questionPosition, setQuestionPosition] =
     useState<QuestionPosition>("center");
   const [questionZoom, setQuestionZoom] = useState(1);
+  const [isPanMode, setIsPanMode] = useState(false);
   const [worksheetSurfaceSize, setWorksheetSurfaceSize] = useState({
     height: 0,
     width: 0,
@@ -281,6 +290,7 @@ export function ConsultationRoom({
   const [selectedColor, setSelectedColor] = useState("#165dff");
   const [selectedSize, setSelectedSize] = useState(4);
   const [selectedTool, setSelectedTool] = useState<WhiteboardTool>("pen");
+  const [isPanning, setIsPanning] = useState(false);
   const [showBottomToolbar, setShowBottomToolbar] = useState(true);
   const [isBoardFullscreen, setIsBoardFullscreen] = useState(false);
   const [fullscreenErrorMessage, setFullscreenErrorMessage] = useState<
@@ -733,6 +743,24 @@ export function ConsultationRoom({
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (isPanMode) {
+      const surface = worksheetSurfaceRef.current;
+
+      if (!surface) {
+        return;
+      }
+
+      panInteractionRef.current = {
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        scrollLeft: surface.scrollLeft,
+        scrollTop: surface.scrollTop,
+      };
+      setIsPanning(true);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+
     const point = makePoint(event.clientX, event.clientY);
 
     if (!point) {
@@ -752,6 +780,22 @@ export function ConsultationRoom({
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const panInteraction = panInteractionRef.current;
+
+    if (panInteraction) {
+      const surface = worksheetSurfaceRef.current;
+
+      if (!surface) {
+        return;
+      }
+
+      surface.scrollLeft =
+        panInteraction.scrollLeft - (event.clientX - panInteraction.pointerX);
+      surface.scrollTop =
+        panInteraction.scrollTop - (event.clientY - panInteraction.pointerY);
+      return;
+    }
+
     if (!currentStrokeRef.current) {
       return;
     }
@@ -773,8 +817,32 @@ export function ConsultationRoom({
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    finishStroke();
+    if (panInteractionRef.current) {
+      panInteractionRef.current = null;
+      setIsPanning(false);
+    } else {
+      finishStroke();
+    }
+
     event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  const handlePointerLeave = () => {
+    if (panInteractionRef.current) {
+      panInteractionRef.current = null;
+      setIsPanning(false);
+      return;
+    }
+
+    finishStroke();
+  };
+
+  const handleTogglePanMode = () => {
+    panInteractionRef.current = null;
+    setIsPanning(false);
+    currentStrokeRef.current = null;
+    setActivePoints([]);
+    setIsPanMode((isMoving) => !isMoving);
   };
 
   const handleToggleBrowserFullscreen = async () => {
@@ -853,19 +921,28 @@ export function ConsultationRoom({
       {tools.map(([tool, label]) => (
         <button
           className={`min-h-12 rounded-xl border px-4 text-sm font-semibold transition ${
-            selectedTool === tool
+            !isPanMode && selectedTool === tool
               ? "border-blue-400 bg-blue-600 text-white"
               : compact
                 ? "border-slate-200 bg-white text-slate-950 shadow-sm hover:bg-slate-50"
                 : "border-white/10 bg-white/5 text-white hover:bg-white/10"
           }`}
           key={tool}
-          onClick={() => setSelectedTool(tool)}
+          onClick={() => {
+            setIsPanMode(false);
+            setSelectedTool(tool);
+          }}
           type="button"
         >
           {label}
         </button>
       ))}
+      <Button
+        onClick={handleTogglePanMode}
+        variant={isPanMode ? "primary" : "secondary"}
+      >
+        {isPanMode ? "Write mode" : "Move board"}
+      </Button>
       {CONSULTATION_COLORS.map((color) => (
         <button
           aria-label={`Use color ${color}`}
@@ -980,7 +1057,7 @@ export function ConsultationRoom({
           className={boardClassName}
           ref={boardRef}
         >
-          <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex flex-wrap items-center justify-between gap-3">
+          <div className="pointer-events-none absolute inset-x-4 top-4 z-30 flex flex-wrap items-center justify-between gap-3">
             <div className="rounded-2xl bg-white/90 px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-950 shadow-lg backdrop-blur">
               Question whiteboard
             </div>
@@ -1081,6 +1158,12 @@ export function ConsultationRoom({
                   Move
                 </span>
                 <Button
+                  onClick={handleTogglePanMode}
+                  variant={isPanMode ? "primary" : "secondary"}
+                >
+                  {isPanMode ? "Write" : "Drag"}
+                </Button>
+                <Button
                   onClick={() => scrollWorksheetSurface("left")}
                   variant="secondary"
                 >
@@ -1118,7 +1201,7 @@ export function ConsultationRoom({
             </div>
           </div>
           {fullscreenErrorMessage ? (
-            <div className="absolute left-4 top-24 z-10 max-w-md rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 shadow-lg">
+            <div className="absolute left-4 top-24 z-30 max-w-md rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 shadow-lg">
               {fullscreenErrorMessage}
             </div>
           ) : null}
@@ -1205,9 +1288,15 @@ export function ConsultationRoom({
                   ) : null}
                 </div>
                 <canvas
-                  className="absolute inset-0 z-10 h-full w-full cursor-crosshair touch-none"
+                  className={`absolute inset-0 z-10 h-full w-full touch-none ${
+                    isPanMode
+                      ? isPanning
+                        ? "cursor-grabbing"
+                        : "cursor-grab"
+                      : "cursor-crosshair"
+                  }`}
                   onPointerDown={handlePointerDown}
-                  onPointerLeave={finishStroke}
+                  onPointerLeave={handlePointerLeave}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
                   ref={canvasRef}
@@ -1216,7 +1305,7 @@ export function ConsultationRoom({
             </div>
           </div>
           {isBoardFullscreen && showBottomToolbar ? (
-            <div className="absolute inset-x-4 bottom-4 z-10 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
+            <div className="absolute inset-x-4 bottom-4 z-30 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
               {renderToolControls(true)}
             </div>
           ) : null}
