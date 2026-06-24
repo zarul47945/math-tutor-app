@@ -9,6 +9,7 @@ import type { Participant } from "livekit-client";
 import type {
   ChangeEvent,
   PointerEvent as ReactPointerEvent,
+  WheelEvent as ReactWheelEvent,
 } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -32,6 +33,8 @@ type DocumentSize = {
   key: string;
   width: number;
 };
+
+type QuestionPosition = "center" | "left" | "right";
 
 const PDF_WORKER_SRC = new URL(
   "pdfjs-dist/build/pdf.worker.mjs",
@@ -262,6 +265,8 @@ export function ConsultationRoom({
     null,
   );
   const [isWorksheetPdfLoading, setIsWorksheetPdfLoading] = useState(false);
+  const [questionPosition, setQuestionPosition] =
+    useState<QuestionPosition>("center");
   const [questionZoom, setQuestionZoom] = useState(1);
   const [worksheetSurfaceSize, setWorksheetSurfaceSize] = useState({
     height: 0,
@@ -276,6 +281,7 @@ export function ConsultationRoom({
   const [selectedColor, setSelectedColor] = useState("#165dff");
   const [selectedSize, setSelectedSize] = useState(4);
   const [selectedTool, setSelectedTool] = useState<WhiteboardTool>("pen");
+  const [showBottomToolbar, setShowBottomToolbar] = useState(true);
   const [isBoardFullscreen, setIsBoardFullscreen] = useState(false);
   const [fullscreenErrorMessage, setFullscreenErrorMessage] = useState<
     string | null
@@ -370,6 +376,12 @@ export function ConsultationRoom({
     questionZoom > 1.01
       ? "flex min-h-full min-w-full items-start justify-start p-4"
       : "flex min-h-full min-w-full items-center justify-center p-4";
+  const worksheetQuestionPositionClassName =
+    questionPosition === "left"
+      ? "justify-start"
+      : questionPosition === "right"
+        ? "justify-end"
+        : "justify-center";
 
   const tools = useMemo(
     () =>
@@ -809,6 +821,33 @@ export function ConsultationRoom({
     setClampedQuestionZoom(1);
   };
 
+  const scrollWorksheetSurface = (direction: "left" | "right") => {
+    const surface = worksheetSurfaceRef.current;
+
+    if (!surface) {
+      return;
+    }
+
+    surface.scrollBy({
+      behavior: "smooth",
+      left:
+        direction === "left"
+          ? -Math.max(240, surface.clientWidth * 0.55)
+          : Math.max(240, surface.clientWidth * 0.55),
+    });
+  };
+
+  const handleWorksheetWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
+    const surface = worksheetSurfaceRef.current;
+
+    if (!surface || !event.shiftKey || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+      return;
+    }
+
+    event.preventDefault();
+    surface.scrollLeft += event.deltaY;
+  };
+
   const renderToolControls = (compact = false) => (
     <div className={`flex flex-wrap gap-2 ${compact ? "max-w-5xl" : ""}`}>
       {tools.map(([tool, label]) => (
@@ -1017,6 +1056,43 @@ export function ConsultationRoom({
                   Fit
                 </Button>
               </div>
+              <div className="flex items-center gap-2 rounded-xl bg-white/90 px-2 py-1 shadow-lg">
+                <span className="px-2 text-sm font-black text-slate-700">
+                  Position
+                </span>
+                {(["left", "center", "right"] as const).map((position) => (
+                  <Button
+                    key={position}
+                    onClick={() => setQuestionPosition(position)}
+                    variant={
+                      questionPosition === position ? "primary" : "secondary"
+                    }
+                  >
+                    {position === "left"
+                      ? "Left"
+                      : position === "right"
+                        ? "Right"
+                        : "Center"}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 rounded-xl bg-white/90 px-2 py-1 shadow-lg">
+                <span className="px-2 text-sm font-black text-slate-700">
+                  Move
+                </span>
+                <Button
+                  onClick={() => scrollWorksheetSurface("left")}
+                  variant="secondary"
+                >
+                  Left
+                </Button>
+                <Button
+                  onClick={() => scrollWorksheetSurface("right")}
+                  variant="secondary"
+                >
+                  Right
+                </Button>
+              </div>
               <Button onClick={onUndoWhiteboard} disabled={!canUndo} variant="secondary">
                 Undo
               </Button>
@@ -1033,6 +1109,12 @@ export function ConsultationRoom({
               >
                 {isBoardFullscreen ? "Exit full screen" : "Full screen"}
               </Button>
+              <Button
+                onClick={() => setShowBottomToolbar((isVisible) => !isVisible)}
+                variant="secondary"
+              >
+                {showBottomToolbar ? "Hide tools" : "Show tools"}
+              </Button>
             </div>
           </div>
           {fullscreenErrorMessage ? (
@@ -1042,6 +1124,7 @@ export function ConsultationRoom({
           ) : null}
           <div
             className={worksheetSurfaceClassName}
+            onWheel={handleWorksheetWheel}
             ref={worksheetSurfaceRef}
             style={{
               backgroundImage:
@@ -1060,7 +1143,9 @@ export function ConsultationRoom({
                   width: worksheetContentSize.width,
                 }}
               >
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div
+                  className={`pointer-events-none absolute inset-0 flex items-center ${worksheetQuestionPositionClassName}`}
+                >
                   {!worksheet?.file_path ? (
                     <div className="mx-6 max-w-md rounded-2xl border border-dashed border-blue-300 bg-blue-50 px-5 py-4 text-center text-sm font-semibold text-slate-700">
                       {role === "teacher"
@@ -1130,7 +1215,7 @@ export function ConsultationRoom({
               </div>
             </div>
           </div>
-          {isBoardFullscreen ? (
+          {isBoardFullscreen && showBottomToolbar ? (
             <div className="absolute inset-x-4 bottom-4 z-10 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
               {renderToolControls(true)}
             </div>
