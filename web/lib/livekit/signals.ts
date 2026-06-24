@@ -41,6 +41,10 @@ export type RoomSignal =
       submittedSets: TherapySubmittedSetMap;
     }
   | {
+      type: "worksheet.updated";
+      by: string;
+    }
+  | {
       type: "whiteboard.stroke";
       stroke: WhiteboardStroke;
     }

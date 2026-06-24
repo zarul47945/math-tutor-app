@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { LessonWorksheet } from "@/lib/types";
+import { validateWorksheetFile } from "@/lib/worksheet-files";
 
 type PdfJsModule = typeof import("pdfjs-dist");
 type PdfDocumentProxy = Awaited<ReturnType<PdfJsModule["getDocument"]>["promise"]>;
@@ -23,17 +25,24 @@ function isImageWorksheet(worksheet: LessonWorksheet | null) {
 }
 
 export function ClassroomDocumentViewer({
+  canUpload = false,
   compact = false,
+  isUploading = false,
+  onUploadFile,
   signedUrl,
   worksheet,
 }: {
+  canUpload?: boolean;
   compact?: boolean;
+  isUploading?: boolean;
+  onUploadFile?: (file: File) => void;
   signedUrl: string | null;
   worksheet: LessonWorksheet | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pageFrameRef = useRef<HTMLDivElement | null>(null);
   const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
+  const uploadInputId = useId();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pageCount, setPageCount] = useState(0);
@@ -44,6 +53,52 @@ export function ClassroomDocumentViewer({
   const isPdf = isPdfWorksheet(worksheet);
   const isImage = isImageWorksheet(worksheet);
   const pdfSourceUrl = isPdf && signedUrl ? signedUrl : null;
+  const uploadLabel = worksheet?.file_path ? "Replace file" : "Upload question";
+
+  const handleUploadChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file || !onUploadFile) {
+      return;
+    }
+
+    try {
+      validateWorksheetFile(file);
+      onUploadFile(file);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Please upload a PNG, JPEG, or PDF worksheet file.",
+      );
+    }
+  };
+
+  const uploadControl =
+    canUpload && onUploadFile ? (
+      <div className="flex flex-wrap items-center gap-2">
+        <label
+          className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700"
+          htmlFor={uploadInputId}
+        >
+          {isUploading ? "Uploading..." : uploadLabel}
+        </label>
+        <input
+          accept="image/png,image/jpeg,application/pdf,.png,.jpg,.jpeg,.pdf"
+          className="sr-only"
+          disabled={isUploading}
+          id={uploadInputId}
+          onChange={handleUploadChange}
+          type="file"
+        />
+        {!compact ? (
+          <p className="text-xs font-semibold text-slate-500">
+            PNG, JPEG, or PDF
+          </p>
+        ) : null}
+      </div>
+    ) : null;
 
   useEffect(() => {
     const sourceUrl = pdfSourceUrl ?? "";
@@ -203,8 +258,11 @@ export function ClassroomDocumentViewer({
             x^2 - 5x + 6 = 0
           </div>
           <div className="text-right text-sm">[3 marks]</div>
-          <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm leading-6 text-slate-800">
-            Upload a worksheet PDF or image to replace this sample question.
+          <div className="flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm leading-6 text-slate-800 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Upload a worksheet PDF or image to replace this sample question.
+            </span>
+            {uploadControl}
           </div>
         </div>
       </div>
@@ -241,39 +299,44 @@ export function ClassroomDocumentViewer({
           </p>
         </div>
 
-        {isPdf ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              disabled={pageNumber <= 1}
-              onClick={() => setPageNumber((current) => Math.max(1, current - 1))}
-              variant="secondary"
-            >
-              Previous
-            </Button>
-            <span className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700">
-              Page {pageNumber} / {pageCount || "-"}
-            </span>
-            <Button
-              disabled={!pageCount || pageNumber >= pageCount}
-              onClick={() =>
-                setPageNumber((current) => Math.min(pageCount, current + 1))
-              }
-              variant="secondary"
-            >
-              Next
-            </Button>
-            <select
-              className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-950"
-              onChange={(event) => setZoom(Number(event.target.value))}
-              value={zoom}
-            >
-              <option value={0.75}>75%</option>
-              <option value={1}>100%</option>
-              <option value={1.25}>125%</option>
-              <option value={1.5}>150%</option>
-            </select>
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {uploadControl}
+          {isPdf ? (
+            <>
+              <Button
+                disabled={pageNumber <= 1}
+                onClick={() =>
+                  setPageNumber((current) => Math.max(1, current - 1))
+                }
+                variant="secondary"
+              >
+                Previous
+              </Button>
+              <span className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700">
+                Page {pageNumber} / {pageCount || "-"}
+              </span>
+              <Button
+                disabled={!pageCount || pageNumber >= pageCount}
+                onClick={() =>
+                  setPageNumber((current) => Math.min(pageCount, current + 1))
+                }
+                variant="secondary"
+              >
+                Next
+              </Button>
+              <select
+                className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-950"
+                onChange={(event) => setZoom(Number(event.target.value))}
+                value={zoom}
+              >
+                <option value={0.75}>75%</option>
+                <option value={1}>100%</option>
+                <option value={1.25}>125%</option>
+                <option value={1.5}>150%</option>
+              </select>
+            </>
+          ) : null}
+        </div>
       </div>
 
       <div

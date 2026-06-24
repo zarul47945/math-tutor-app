@@ -202,6 +202,7 @@ export function ConsultationRoom({
   onToggleCamera,
   onToggleMicrophone,
   onUndoWhiteboard,
+  onUploadWorksheetFile,
   participantCount,
   remoteCameraTrackByIdentity,
   remoteParticipants,
@@ -211,6 +212,7 @@ export function ConsultationRoom({
   whiteboardStrokes,
   worksheet,
   worksheetFileUrl,
+  worksheetUploadPending,
 }: {
   canUndo: boolean;
   cameraEnabled: boolean;
@@ -227,6 +229,7 @@ export function ConsultationRoom({
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
   onUndoWhiteboard: () => void;
+  onUploadWorksheetFile?: (file: File) => void;
   participantCount: number;
   remoteCameraTrackByIdentity: Map<string, TrackReferenceOrPlaceholder>;
   remoteParticipants: Participant[];
@@ -236,6 +239,7 @@ export function ConsultationRoom({
   whiteboardStrokes: WhiteboardStroke[];
   worksheet: LessonWorksheet | null;
   worksheetFileUrl: string | null;
+  worksheetUploadPending: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -710,6 +714,9 @@ export function ConsultationRoom({
           />
 
           <ClassroomDocumentViewer
+            canUpload={role === "teacher"}
+            isUploading={worksheetUploadPending}
+            onUploadFile={onUploadWorksheetFile}
             signedUrl={worksheetFileUrl}
             worksheet={worksheet}
           />
@@ -826,7 +833,10 @@ export function ConsultationRoom({
               </div>
               <div className="min-h-0 flex-1 overflow-hidden">
                 <ClassroomDocumentViewer
+                  canUpload={role === "teacher"}
                   compact
+                  isUploading={worksheetUploadPending}
+                  onUploadFile={onUploadWorksheetFile}
                   signedUrl={worksheetFileUrl}
                   worksheet={worksheet}
                 />

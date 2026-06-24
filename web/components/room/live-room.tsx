@@ -15,7 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { RoomEvent, Track } from "livekit-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { RoomControls } from "@/components/room/room-controls";
 import { RoomVideoTile } from "@/components/room/room-video-tile";
@@ -49,9 +49,11 @@ import { worksheetToTherapySets } from "@/lib/lesson-worksheet";
 import { fetchLiveKitToken } from "@/lib/livekit/token";
 import { createClient } from "@/lib/supabase/client";
 import {
+  createSessionWorksheet,
   getActiveSessionRoomState,
   getSessionWorksheet,
   listSessionParticipants,
+  replaceSessionWorksheet,
   updateSessionTimer,
 } from "@/lib/supabase/queries";
 import type {
@@ -63,7 +65,10 @@ import type {
   SessionRoomState,
 } from "@/lib/types";
 import { formatDateTime, formatSeconds } from "@/lib/utils";
-import { createWorksheetFileSignedUrl } from "@/lib/worksheet-files";
+import {
+  createWorksheetFileSignedUrl,
+  uploadWorksheetFile,
+} from "@/lib/worksheet-files";
 
 function backHrefForRole(role: LiveKitRole) {
   return role === "teacher" ? "/teacher/dashboard" : "/student/dashboard";
@@ -381,6 +386,7 @@ function RoomExperience({
   const [therapyInkStrokes, setTherapyInkStrokes] = useState<TherapyInkStroke[]>(
     [],
   );
+  const [isWorksheetUploadPending, setIsWorksheetUploadPending] = useState(false);
   const [whiteboardEnabled, setWhiteboardEnabled] = useState(false);
   const [whiteboardStrokes, setWhiteboardStrokes] = useState<WhiteboardStroke[]>([]);
   const [timerNow, setTimerNow] = useState(0);
@@ -464,6 +470,12 @@ function RoomExperience({
     return null;
   }, [lastCameraError, lastMicrophoneError]);
 
+  const loadLessonWorksheet = useCallback(async () => {
+    const worksheet = await getSessionWorksheet(supabase, sessionId);
+    setLessonWorksheet(worksheet);
+    return worksheet;
+  }, [sessionId, supabase]);
+
   const applyLocalTherapySnapshot = ({
     answers,
     revision,
@@ -528,6 +540,17 @@ function RoomExperience({
 
       skipNextTherapyBroadcastRef.current = true;
       applyLocalTherapySnapshot(signal);
+      return;
+    }
+
+    if (signal.type === "worksheet.updated") {
+      void loadLessonWorksheet().catch((worksheetError) => {
+        setFeedback(
+          worksheetError instanceof Error
+            ? worksheetError.message
+            : "Unable to refresh the lesson worksheet right now.",
+        );
+      });
       return;
     }
 
@@ -820,6 +843,63 @@ function RoomExperience({
           ? signalError.message
           : "Unable to sync this room action to the other participant.",
       );
+    }
+  };
+
+  const handleConsultationWorksheetUpload = async (file: File) => {
+    if (role !== "teacher" || isWorksheetUploadPending) {
+      return;
+    }
+
+    setFeedback(null);
+    setIsWorksheetUploadPending(true);
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        throw userError ?? new Error("Teacher login is required to upload a question.");
+      }
+
+      const attachment = await uploadWorksheetFile({
+        file,
+        sessionId,
+        supabase,
+        teacherId: user.id,
+      });
+      const worksheetPayload = {
+        attachment,
+        instructions: "Open the uploaded worksheet file during the lesson.",
+        sessionId,
+        sets: [],
+        supabase,
+        teacherId: user.id,
+        title: file.name || "Uploaded worksheet",
+      };
+
+      if (lessonWorksheet) {
+        await replaceSessionWorksheet(worksheetPayload);
+      } else {
+        await createSessionWorksheet(worksheetPayload);
+      }
+
+      await loadLessonWorksheet();
+      await syncRoomSignal({
+        by: role,
+        type: "worksheet.updated",
+      });
+      setFeedback("Question uploaded. The classroom preview has been updated.");
+    } catch (uploadError) {
+      setFeedback(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Unable to upload this question right now.",
+      );
+    } finally {
+      setIsWorksheetUploadPending(false);
     }
   };
 
@@ -1152,6 +1232,7 @@ function RoomExperience({
         onToggleCamera={handleToggleCamera}
         onToggleMicrophone={handleToggleMicrophone}
         onUndoWhiteboard={handleUndoWhiteboard}
+        onUploadWorksheetFile={handleConsultationWorksheetUpload}
         participantCount={participants.length}
         remoteCameraTrackByIdentity={remoteCameraTrackByIdentity}
         remoteParticipants={remoteParticipants}
@@ -1161,6 +1242,7 @@ function RoomExperience({
         whiteboardStrokes={whiteboardStrokes}
         worksheet={lessonWorksheet}
         worksheetFileUrl={worksheetFileUrl}
+        worksheetUploadPending={isWorksheetUploadPending}
       />
     );
   }
