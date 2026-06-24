@@ -202,6 +202,7 @@ function ConsultationVideoTile({
 }
 
 export function ConsultationRoom({
+  canRedo,
   canUndo,
   cameraEnabled,
   connectionState,
@@ -213,6 +214,7 @@ export function ConsultationRoom({
   microphoneEnabled,
   onClearWhiteboard,
   onLeave,
+  onRedoWhiteboard,
   onStrokeComplete,
   onToggleCamera,
   onToggleMicrophone,
@@ -231,6 +233,7 @@ export function ConsultationRoom({
   worksheetPageNumber,
   worksheetUploadPending,
 }: {
+  canRedo: boolean;
   canUndo: boolean;
   cameraEnabled: boolean;
   connectionState: string;
@@ -242,6 +245,7 @@ export function ConsultationRoom({
   microphoneEnabled: boolean;
   onClearWhiteboard: () => void;
   onLeave: () => void;
+  onRedoWhiteboard: () => void;
   onStrokeComplete: (stroke: WhiteboardStroke) => void;
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
@@ -979,6 +983,9 @@ export function ConsultationRoom({
       <Button disabled={!canUndo} onClick={onUndoWhiteboard} variant="secondary">
         Undo
       </Button>
+      <Button disabled={!canRedo} onClick={onRedoWhiteboard} variant="secondary">
+        Redo
+      </Button>
       <Button disabled={!canClear} onClick={onClearWhiteboard} variant="secondary">
         Clear All
       </Button>
@@ -1178,6 +1185,9 @@ export function ConsultationRoom({
               </div>
               <Button onClick={onUndoWhiteboard} disabled={!canUndo} variant="secondary">
                 Undo
+              </Button>
+              <Button onClick={onRedoWhiteboard} disabled={!canRedo} variant="secondary">
+                Redo
               </Button>
               <Button
                 disabled={!canClear}

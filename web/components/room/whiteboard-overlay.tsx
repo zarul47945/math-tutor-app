@@ -166,10 +166,12 @@ function WhiteboardCameraTile({
 
 export function WhiteboardOverlay({
   cameraParticipants,
+  canRedo,
   canUndo,
   enabled,
   onClear,
   onClose,
+  onRedo,
   onStrokeComplete,
   onUndo,
   role,
@@ -179,10 +181,12 @@ export function WhiteboardOverlay({
     participant: Participant;
     trackRef: TrackReferenceOrPlaceholder | null;
   }>;
+  canRedo: boolean;
   canUndo: boolean;
   enabled: boolean;
   onClear: () => void;
   onClose: () => void;
+  onRedo: () => void;
   onStrokeComplete: (stroke: WhiteboardStroke) => void;
   onUndo: () => void;
   role: LiveKitRole;
@@ -369,6 +373,9 @@ export function WhiteboardOverlay({
             <div className="flex flex-wrap gap-3">
               <Button disabled={!canUndo} onClick={onUndo} variant="secondary">
                 Undo
+              </Button>
+              <Button disabled={!canRedo} onClick={onRedo} variant="secondary">
+                Redo
               </Button>
               <Button
                 disabled={strokes.length === 0}

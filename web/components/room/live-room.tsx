@@ -390,6 +390,9 @@ function RoomExperience({
   const [isWorksheetUploadPending, setIsWorksheetUploadPending] = useState(false);
   const [whiteboardEnabled, setWhiteboardEnabled] = useState(false);
   const [whiteboardStrokes, setWhiteboardStrokes] = useState<WhiteboardStroke[]>([]);
+  const [redoWhiteboardStrokes, setRedoWhiteboardStrokes] = useState<
+    WhiteboardStroke[]
+  >([]);
   const [timerNow, setTimerNow] = useState(0);
   const skipNextTherapyBroadcastRef = useRef(false);
   const therapyAnswersRef = useRef<TherapyAnswerMap>({});
@@ -547,6 +550,7 @@ function RoomExperience({
     if (signal.type === "worksheet.updated") {
       setWorksheetPageNumber(1);
       setWhiteboardStrokes([]);
+      setRedoWhiteboardStrokes([]);
       void loadLessonWorksheet().catch((worksheetError) => {
         setFeedback(
           worksheetError instanceof Error
@@ -560,11 +564,13 @@ function RoomExperience({
     if (signal.type === "worksheet.page") {
       setWorksheetPageNumber(Math.max(1, signal.pageNumber));
       setWhiteboardStrokes([]);
+      setRedoWhiteboardStrokes([]);
       return;
     }
 
     if (signal.type === "whiteboard.clear") {
       setWhiteboardStrokes([]);
+      setRedoWhiteboardStrokes([]);
       return;
     }
 
@@ -861,6 +867,7 @@ function RoomExperience({
 
       setWorksheetPageNumber(nextPageNumber);
       setWhiteboardStrokes([]);
+      setRedoWhiteboardStrokes([]);
       void syncRoomSignal({
         by: role,
         pageNumber: nextPageNumber,
@@ -917,6 +924,7 @@ function RoomExperience({
       await loadLessonWorksheet();
       setWorksheetPageNumber(1);
       setWhiteboardStrokes([]);
+      setRedoWhiteboardStrokes([]);
       await syncRoomSignal({
         by: role,
         type: "worksheet.updated",
@@ -1096,6 +1104,9 @@ function RoomExperience({
 
   const handleStrokeComplete = (stroke: WhiteboardStroke) => {
     setWhiteboardStrokes((currentStrokes) => [...currentStrokes, stroke]);
+    setRedoWhiteboardStrokes((currentStrokes) =>
+      currentStrokes.filter((redoStroke) => redoStroke.author !== stroke.author),
+    );
     void syncRoomSignal({
       type: "whiteboard.stroke",
       stroke,
@@ -1104,6 +1115,7 @@ function RoomExperience({
 
   const handleClearWhiteboard = () => {
     setWhiteboardStrokes([]);
+    setRedoWhiteboardStrokes([]);
     void syncRoomSignal({
       by: role,
       type: "whiteboard.clear",
@@ -1122,10 +1134,46 @@ function RoomExperience({
     setWhiteboardStrokes((currentStrokes) =>
       currentStrokes.filter((stroke) => stroke.id !== lastOwnStroke.id),
     );
+    setRedoWhiteboardStrokes((currentStrokes) => [
+      ...currentStrokes,
+      lastOwnStroke,
+    ]);
     void syncRoomSignal({
       by: role,
       strokeId: lastOwnStroke.id,
       type: "whiteboard.undo",
+    });
+  };
+
+  const handleRedoWhiteboard = () => {
+    let redoStrokeIndex = -1;
+
+    for (let index = redoWhiteboardStrokes.length - 1; index >= 0; index -= 1) {
+      if (redoWhiteboardStrokes[index].author === role) {
+        redoStrokeIndex = index;
+        break;
+      }
+    }
+
+    if (redoStrokeIndex === -1) {
+      return;
+    }
+
+    const redoStroke = redoWhiteboardStrokes[redoStrokeIndex];
+
+    setRedoWhiteboardStrokes((currentStrokes) =>
+      currentStrokes.filter((stroke) => stroke.id !== redoStroke.id),
+    );
+    setWhiteboardStrokes((currentStrokes) => {
+      if (currentStrokes.some((stroke) => stroke.id === redoStroke.id)) {
+        return currentStrokes;
+      }
+
+      return [...currentStrokes, redoStroke];
+    });
+    void syncRoomSignal({
+      type: "whiteboard.stroke",
+      stroke: redoStroke,
     });
   };
 
@@ -1252,6 +1300,7 @@ function RoomExperience({
     return (
       <ConsultationRoom
         cameraEnabled={isLocalCameraActive}
+        canRedo={redoWhiteboardStrokes.some((stroke) => stroke.author === role)}
         canUndo={whiteboardStrokes.some((stroke) => stroke.author === role)}
         connectionState={connectionState}
         displayedElapsedSeconds={displayedElapsedSeconds}
@@ -1262,6 +1311,7 @@ function RoomExperience({
         microphoneEnabled={isLocalMicrophoneActive}
         onClearWhiteboard={handleClearWhiteboard}
         onLeave={handleLeave}
+        onRedoWhiteboard={handleRedoWhiteboard}
         onStrokeComplete={handleStrokeComplete}
         onToggleCamera={handleToggleCamera}
         onToggleMicrophone={handleToggleMicrophone}
@@ -1379,10 +1429,12 @@ function RoomExperience({
         {whiteboardEnabled ? (
           <WhiteboardOverlay
             cameraParticipants={whiteboardCameraParticipants}
+            canRedo={redoWhiteboardStrokes.some((stroke) => stroke.author === role)}
             canUndo={whiteboardStrokes.some((stroke) => stroke.author === role)}
             enabled={whiteboardEnabled}
             onClear={handleClearWhiteboard}
             onClose={() => setWhiteboardEnabled(false)}
+            onRedo={handleRedoWhiteboard}
             onStrokeComplete={handleStrokeComplete}
             onUndo={handleUndoWhiteboard}
             role={role}
