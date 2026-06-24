@@ -27,6 +27,12 @@ import { validateWorksheetFile } from "@/lib/worksheet-files";
 type PdfJsModule = typeof import("pdfjs-dist");
 type PdfDocumentProxy = Awaited<ReturnType<PdfJsModule["getDocument"]>["promise"]>;
 
+type DocumentSize = {
+  height: number;
+  key: string;
+  width: number;
+};
+
 const PDF_WORKER_SRC = new URL(
   "pdfjs-dist/build/pdf.worker.mjs",
   import.meta.url,
@@ -57,6 +63,7 @@ function isImageWorksheet(worksheet: LessonWorksheet | null) {
 function drawStroke(
   context: CanvasRenderingContext2D,
   height: number,
+  lineScale: number,
   stroke: WhiteboardStroke,
   width: number,
 ) {
@@ -73,7 +80,7 @@ function drawStroke(
   context.strokeStyle = stroke.color;
   context.lineCap = "round";
   context.lineJoin = "round";
-  context.lineWidth = stroke.size;
+  context.lineWidth = Math.max(1, stroke.size * lineScale);
 
   if (stroke.tool === "line") {
     context.beginPath();
@@ -251,12 +258,21 @@ export function ConsultationRoom({
   const currentStrokeRef = useRef<WhiteboardStroke | null>(null);
   const uploadInputId = useId();
   const [activePoints, setActivePoints] = useState<WhiteboardPoint[]>([]);
-  const [canvasSize, setCanvasSize] = useState({ height: 0, width: 0 });
+  const [imageNaturalSize, setImageNaturalSize] = useState<DocumentSize | null>(
+    null,
+  );
   const [isWorksheetPdfLoading, setIsWorksheetPdfLoading] = useState(false);
+  const [questionZoom, setQuestionZoom] = useState(1);
+  const [worksheetSurfaceSize, setWorksheetSurfaceSize] = useState({
+    height: 0,
+    width: 0,
+  });
   const [worksheetPageCount, setWorksheetPageCount] = useState(0);
   const [worksheetPdfDocument, setWorksheetPdfDocument] =
     useState<PdfDocumentProxy | null>(null);
   const [worksheetPdfError, setWorksheetPdfError] = useState<string | null>(null);
+  const [worksheetPdfPageSize, setWorksheetPdfPageSize] =
+    useState<DocumentSize | null>(null);
   const [selectedColor, setSelectedColor] = useState("#165dff");
   const [selectedSize, setSelectedSize] = useState(4);
   const [selectedTool, setSelectedTool] = useState<WhiteboardTool>("pen");
@@ -285,12 +301,59 @@ export function ConsultationRoom({
   const isWorksheetImage = isImageWorksheet(worksheet);
   const canUploadWorksheet = role === "teacher" && Boolean(onUploadWorksheetFile);
   const uploadLabel = worksheet?.file_path ? "Replace question" : "Upload question";
+  const worksheetFileKey = worksheet?.file_path ?? "sample-question";
+  const worksheetPageKey = `${worksheetFileKey}:${worksheetPageNumber}`;
+  const worksheetDocumentSize =
+    isWorksheetImage && imageNaturalSize?.key === worksheetFileKey
+      ? imageNaturalSize
+      : isWorksheetPdf && worksheetPdfPageSize?.key === worksheetPageKey
+        ? worksheetPdfPageSize
+        : null;
+  const worksheetContentSize = useMemo(() => {
+    const availableWidth = Math.max((worksheetSurfaceSize.width || 900) - 32, 320);
+    const availableHeight = Math.max(
+      (worksheetSurfaceSize.height || 620) - 32,
+      240,
+    );
+
+    if (!worksheetDocumentSize?.width || !worksheetDocumentSize.height) {
+      return {
+        height: Math.round(availableHeight),
+        width: Math.round(availableWidth),
+      };
+    }
+
+    const fitScale = Math.min(
+      availableWidth / worksheetDocumentSize.width,
+      availableHeight / worksheetDocumentSize.height,
+    );
+
+    return {
+      height: Math.max(
+        1,
+        Math.round(worksheetDocumentSize.height * fitScale * questionZoom),
+      ),
+      width: Math.max(
+        1,
+        Math.round(worksheetDocumentSize.width * fitScale * questionZoom),
+      ),
+    };
+  }, [
+    questionZoom,
+    worksheetDocumentSize,
+    worksheetSurfaceSize.height,
+    worksheetSurfaceSize.width,
+  ]);
   const boardClassName = isBoardFullscreen
     ? "relative h-screen w-screen overflow-hidden rounded-none bg-white shadow-2xl"
     : "relative min-h-[58vh] overflow-hidden rounded-2xl bg-white shadow-2xl lg:min-h-[62vh]";
   const worksheetSurfaceClassName = isBoardFullscreen
-    ? "absolute inset-x-4 bottom-28 top-20 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-inner"
-    : "absolute inset-x-4 bottom-4 top-20 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-inner";
+    ? "absolute inset-x-4 bottom-28 top-20 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-inner"
+    : "absolute inset-x-4 bottom-4 top-20 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-inner";
+  const worksheetContentFrameClassName =
+    questionZoom > 1.01
+      ? "flex min-h-full min-w-full items-start justify-start p-4"
+      : "flex min-h-full min-w-full items-center justify-center p-4";
 
   const tools = useMemo(
     () =>
@@ -311,7 +374,7 @@ export function ConsultationRoom({
       return;
     }
 
-    setCanvasSize({
+    setWorksheetSurfaceSize({
       height: surface.clientHeight,
       width: surface.clientWidth,
     });
@@ -417,11 +480,57 @@ export function ConsultationRoom({
     worksheetPageNumber,
   ]);
 
+  useEffect(() => {
+    if (!worksheetPdfDocument || !isWorksheetPdf) {
+      return;
+    }
+
+    const pdfDocument = worksheetPdfDocument;
+    let isMounted = true;
+
+    async function loadPageSize() {
+      try {
+        const safePageNumber = Math.max(
+          1,
+          Math.min(worksheetPageNumber, pdfDocument.numPages),
+        );
+        const page = await pdfDocument.getPage(safePageNumber);
+        const viewport = page.getViewport({ scale: 1 });
+
+        if (isMounted) {
+          setWorksheetPdfPageSize({
+            height: viewport.height,
+            key: worksheetPageKey,
+            width: viewport.width,
+          });
+        }
+      } catch (error) {
+        if (isMounted) {
+          setWorksheetPdfError(
+            error instanceof Error
+              ? error.message
+              : "Unable to measure this PDF page.",
+          );
+        }
+      }
+    }
+
+    void loadPageSize();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    isWorksheetPdf,
+    worksheetPageKey,
+    worksheetPageNumber,
+    worksheetPdfDocument,
+  ]);
+
   const renderWorksheetPdfPage = useCallback(async () => {
     const canvas = worksheetPdfCanvasRef.current;
-    const surface = worksheetSurfaceRef.current;
 
-    if (!canvas || !surface || !worksheetPdfDocument) {
+    if (!canvas || !worksheetPdfDocument) {
       return;
     }
 
@@ -436,13 +545,9 @@ export function ConsultationRoom({
       );
       const page = await worksheetPdfDocument.getPage(safePageNumber);
       const unscaledViewport = page.getViewport({ scale: 1 });
-      const maxWidth = Math.max(surface.clientWidth - 32, 320);
-      const maxHeight = Math.max(surface.clientHeight - 32, 240);
-      const fitScale = Math.min(
-        maxWidth / unscaledViewport.width,
-        maxHeight / unscaledViewport.height,
-      );
-      const viewport = page.getViewport({ scale: Math.max(0.1, fitScale) });
+      const viewport = page.getViewport({
+        scale: Math.max(0.1, worksheetContentSize.width / unscaledViewport.width),
+      });
       const pixelRatio = window.devicePixelRatio || 1;
       const context = canvas.getContext("2d");
 
@@ -452,8 +557,8 @@ export function ConsultationRoom({
 
       canvas.width = Math.floor(viewport.width * pixelRatio);
       canvas.height = Math.floor(viewport.height * pixelRatio);
-      canvas.style.width = `${viewport.width}px`;
-      canvas.style.height = `${viewport.height}px`;
+      canvas.style.width = `${worksheetContentSize.width}px`;
+      canvas.style.height = `${worksheetContentSize.height}px`;
 
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       context.clearRect(0, 0, viewport.width, viewport.height);
@@ -479,7 +584,12 @@ export function ConsultationRoom({
     } finally {
       setIsWorksheetPdfLoading(false);
     }
-  }, [worksheetPageNumber, worksheetPdfDocument]);
+  }, [
+    worksheetContentSize.height,
+    worksheetContentSize.width,
+    worksheetPageNumber,
+    worksheetPdfDocument,
+  ]);
 
   useEffect(() => {
     if (!worksheetPdfDocument) {
@@ -513,8 +623,8 @@ export function ConsultationRoom({
       return;
     }
 
-    canvas.width = canvasSize.width;
-    canvas.height = canvasSize.height;
+    canvas.width = worksheetContentSize.width;
+    canvas.height = worksheetContentSize.height;
 
     const context = canvas.getContext("2d");
 
@@ -524,13 +634,25 @@ export function ConsultationRoom({
 
     context.clearRect(0, 0, canvas.width, canvas.height);
     whiteboardStrokes.forEach((stroke) =>
-      drawStroke(context, canvas.height, stroke, canvas.width),
+      drawStroke(context, canvas.height, questionZoom, stroke, canvas.width),
     );
 
     if (currentStrokeRef.current) {
-      drawStroke(context, canvas.height, currentStrokeRef.current, canvas.width);
+      drawStroke(
+        context,
+        canvas.height,
+        questionZoom,
+        currentStrokeRef.current,
+        canvas.width,
+      );
     }
-  }, [activePoints, canvasSize.height, canvasSize.width, whiteboardStrokes]);
+  }, [
+    activePoints,
+    questionZoom,
+    whiteboardStrokes,
+    worksheetContentSize.height,
+    worksheetContentSize.width,
+  ]);
 
   const handleBoardUploadChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -652,6 +774,23 @@ export function ConsultationRoom({
       );
       queueBoardResize();
     }
+  };
+
+  const setClampedQuestionZoom = (nextZoom: number) => {
+    setQuestionZoom(Math.min(3, Math.max(0.5, Number(nextZoom.toFixed(2)))));
+    queueBoardResize();
+  };
+
+  const handleZoomOut = () => {
+    setClampedQuestionZoom(questionZoom - 0.25);
+  };
+
+  const handleZoomIn = () => {
+    setClampedQuestionZoom(questionZoom + 0.25);
+  };
+
+  const handleFitQuestion = () => {
+    setClampedQuestionZoom(1);
   };
 
   const renderToolControls = (compact = false) => (
@@ -836,6 +975,32 @@ export function ConsultationRoom({
                   ) : null}
                 </div>
               ) : null}
+              <div className="flex items-center gap-2 rounded-xl bg-white/90 px-2 py-1 shadow-lg">
+                <Button
+                  disabled={questionZoom <= 0.5}
+                  onClick={handleZoomOut}
+                  variant="secondary"
+                >
+                  Zoom -
+                </Button>
+                <span className="min-w-14 text-center text-sm font-black text-slate-700">
+                  {Math.round(questionZoom * 100)}%
+                </span>
+                <Button
+                  disabled={questionZoom >= 3}
+                  onClick={handleZoomIn}
+                  variant="secondary"
+                >
+                  Zoom +
+                </Button>
+                <Button
+                  disabled={questionZoom === 1}
+                  onClick={handleFitQuestion}
+                  variant="secondary"
+                >
+                  Fit
+                </Button>
+              </div>
               <Button onClick={onUndoWhiteboard} disabled={!canUndo} variant="secondary">
                 Undo
               </Button>
@@ -868,58 +1033,75 @@ export function ConsultationRoom({
               backgroundSize: "28px 28px",
             }}
           >
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70">
-              {!worksheet?.file_path ? (
-                <div className="max-w-md rounded-2xl border border-dashed border-blue-300 bg-blue-50 px-5 py-4 text-center text-sm font-semibold text-slate-700">
-                  {role === "teacher"
-                    ? "Upload a PNG, JPEG, or PDF question to turn this board into a writable worksheet."
-                    : "Waiting for the teacher to upload a question page."}
+            <div className={worksheetContentFrameClassName}>
+              <div
+                className="relative shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+                style={{
+                  height: worksheetContentSize.height,
+                  width: worksheetContentSize.width,
+                }}
+              >
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white">
+                  {!worksheet?.file_path ? (
+                    <div className="mx-6 max-w-md rounded-2xl border border-dashed border-blue-300 bg-blue-50 px-5 py-4 text-center text-sm font-semibold text-slate-700">
+                      {role === "teacher"
+                        ? "Upload a PNG, JPEG, or PDF question to turn this board into a writable worksheet."
+                        : "Waiting for the teacher to upload a question page."}
+                    </div>
+                  ) : !worksheetFileUrl ? (
+                    <p className="rounded-2xl bg-white px-5 py-4 text-sm font-semibold text-slate-500 shadow-lg">
+                      Preparing question page...
+                    </p>
+                  ) : isWorksheetImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      alt={worksheet.file_name ?? "Uploaded question page"}
+                      className="h-full w-full object-contain"
+                      onLoad={(event) => {
+                        setImageNaturalSize({
+                          height: event.currentTarget.naturalHeight,
+                          key: worksheetFileKey,
+                          width: event.currentTarget.naturalWidth,
+                        });
+                      }}
+                      src={worksheetFileUrl}
+                    />
+                  ) : isWorksheetPdf ? (
+                    <canvas
+                      className="h-full w-full bg-white"
+                      ref={worksheetPdfCanvasRef}
+                    />
+                  ) : (
+                    <a
+                      className="pointer-events-auto rounded-2xl bg-white px-5 py-4 text-sm font-bold text-blue-700 underline shadow-lg"
+                      href={worksheetFileUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Open uploaded question file
+                    </a>
+                  )}
+                  {isWorksheetPdf && isWorksheetPdfLoading ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-semibold text-slate-500">
+                      Rendering question page...
+                    </div>
+                  ) : null}
+                  {isWorksheetPdf && worksheetPdfError ? (
+                    <div className="absolute inset-x-6 bottom-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+                      {worksheetPdfError}
+                    </div>
+                  ) : null}
                 </div>
-              ) : !worksheetFileUrl ? (
-                <p className="rounded-2xl bg-white px-5 py-4 text-sm font-semibold text-slate-500 shadow-lg">
-                  Preparing question page...
-                </p>
-              ) : isWorksheetImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  alt={worksheet.file_name ?? "Uploaded question page"}
-                  className="h-full w-full object-contain"
-                  src={worksheetFileUrl}
-                />
-              ) : isWorksheetPdf ? (
                 <canvas
-                  className="max-h-full max-w-full rounded-lg bg-white shadow-lg"
-                  ref={worksheetPdfCanvasRef}
+                  className="absolute inset-0 z-10 h-full w-full cursor-crosshair touch-none"
+                  onPointerDown={handlePointerDown}
+                  onPointerLeave={finishStroke}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  ref={canvasRef}
                 />
-              ) : (
-                <a
-                  className="pointer-events-auto rounded-2xl bg-white px-5 py-4 text-sm font-bold text-blue-700 underline shadow-lg"
-                  href={worksheetFileUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Open uploaded question file
-                </a>
-              )}
-              {isWorksheetPdf && isWorksheetPdfLoading ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-semibold text-slate-500">
-                  Rendering question page...
-                </div>
-              ) : null}
-              {isWorksheetPdf && worksheetPdfError ? (
-                <div className="absolute inset-x-6 bottom-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-                  {worksheetPdfError}
-                </div>
-              ) : null}
+              </div>
             </div>
-            <canvas
-              className="absolute inset-0 z-10 h-full w-full cursor-crosshair touch-none"
-              onPointerDown={handlePointerDown}
-              onPointerLeave={finishStroke}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              ref={canvasRef}
-            />
           </div>
           {isBoardFullscreen ? (
             <div className="absolute inset-x-4 bottom-4 z-10 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
