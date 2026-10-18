@@ -10,6 +10,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { drawGeometryStroke } from "@/lib/livekit/draw-geometry-stroke";
 import type {
   WhiteboardPoint,
   WhiteboardStroke,
@@ -49,6 +50,11 @@ function drawWhiteboardStroke(
   context.lineCap = "round";
   context.lineJoin = "round";
   context.lineWidth = stroke.size;
+
+  if (drawGeometryStroke(context, height, stroke, width)) {
+    context.restore();
+    return;
+  }
 
   if (stroke.tool === "line") {
     context.beginPath();
@@ -106,8 +112,16 @@ function toolLabel(tool: WhiteboardTool) {
       return "Line";
     case "pen":
       return "Pen";
+    case "ruler":
+      return "Pembaris / Ruler";
+    case "compass":
+      return "Jangka lukis / Compass";
+    case "protractor":
+      return "Jangka sudut / Protractor";
     case "rectangle":
       return "Box";
+    case "set-square":
+      return "Sesiku / Set square";
     default:
       return tool;
   }
@@ -401,7 +415,17 @@ export function WhiteboardOverlay({
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   {(
-                    ["pen", "eraser", "line", "rectangle", "ellipse"] as WhiteboardTool[]
+                    [
+                      "pen",
+                      "eraser",
+                      "line",
+                      "rectangle",
+                      "ellipse",
+                      "ruler",
+                      "compass",
+                      "protractor",
+                      "set-square",
+                    ] as WhiteboardTool[]
                   ).map((tool) => (
                     <button
                       key={tool}

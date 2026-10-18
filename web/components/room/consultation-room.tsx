@@ -16,6 +16,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { ClassroomDocumentViewer } from "@/components/room/classroom-document-viewer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { drawGeometryStroke } from "@/lib/livekit/draw-geometry-stroke";
 import type {
   WhiteboardPoint,
   WhiteboardStroke,
@@ -93,6 +94,11 @@ function drawStroke(
   context.lineCap = "round";
   context.lineJoin = "round";
   context.lineWidth = Math.max(1, stroke.size * lineScale);
+
+  if (drawGeometryStroke(context, height, stroke, width, lineScale)) {
+    context.restore();
+    return;
+  }
 
   if (stroke.tool === "line") {
     context.beginPath();
@@ -420,6 +426,10 @@ export function ConsultationRoom({
         ["line", "Line"],
         ["rectangle", "Box"],
         ["ellipse", "Circle"],
+        ["ruler", "Pembaris / Ruler"],
+        ["compass", "Jangka lukis / Compass"],
+        ["protractor", "Jangka sudut / Protractor"],
+        ["set-square", "Sesiku / Set square"],
       ] as Array<[WhiteboardTool, string]>,
     [],
   );

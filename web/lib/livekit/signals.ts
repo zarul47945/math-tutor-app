@@ -12,7 +12,16 @@ export type WhiteboardPoint = {
   y: number;
 };
 
-export type WhiteboardTool = "ellipse" | "eraser" | "line" | "pen" | "rectangle";
+export type WhiteboardTool =
+  | "compass"
+  | "ellipse"
+  | "eraser"
+  | "line"
+  | "pen"
+  | "protractor"
+  | "rectangle"
+  | "ruler"
+  | "set-square";
 
 export type WhiteboardStroke = {
   id: string;
