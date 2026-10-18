@@ -270,7 +270,11 @@ export function ConsultationRoom({
   const boardRef = useRef<HTMLDivElement | null>(null);
   const worksheetSurfaceRef = useRef<HTMLDivElement | null>(null);
   const worksheetPdfCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const worksheetPdfRenderTaskRef = useRef<{ cancel: () => void } | null>(null);
+  const worksheetPdfRenderTaskRef = useRef<{
+    cancel: () => void;
+    promise: Promise<void>;
+  } | null>(null);
+  const worksheetPdfRenderVersionRef = useRef(0);
   const currentStrokeRef = useRef<WhiteboardStroke | null>(null);
   const panInteractionRef = useRef<PanInteraction | null>(null);
   const uploadInputId = useId();
@@ -287,10 +291,13 @@ export function ConsultationRoom({
     height: 0,
     width: 0,
   });
-  const [worksheetPageCount, setWorksheetPageCount] = useState(0);
-  const [worksheetPdfDocument, setWorksheetPdfDocument] =
-    useState<PdfDocumentProxy | null>(null);
+  const [loadedWorksheetPdf, setLoadedWorksheetPdf] = useState<{
+    document: PdfDocumentProxy;
+    sourceUrl: string;
+  } | null>(null);
   const [worksheetPdfError, setWorksheetPdfError] = useState<string | null>(null);
+  const [worksheetPdfCanvasReadyFileKey, setWorksheetPdfCanvasReadyFileKey] =
+    useState<string | null>(null);
   const [worksheetPdfPageSize, setWorksheetPdfPageSize] =
     useState<DocumentSize | null>(null);
   const [selectedColor, setSelectedColor] = useState("#165dff");
@@ -325,6 +332,12 @@ export function ConsultationRoom({
   const uploadLabel = worksheet?.file_path ? "Replace question" : "Upload question";
   const worksheetFileKey = worksheet?.file_path ?? "sample-question";
   const worksheetPageKey = `${worksheetFileKey}:${worksheetPageNumber}`;
+  const pdfSourceUrl = isWorksheetPdf && worksheetFileUrl ? worksheetFileUrl : null;
+  const worksheetPdfDocument =
+    loadedWorksheetPdf?.sourceUrl === pdfSourceUrl
+      ? loadedWorksheetPdf.document
+      : null;
+  const worksheetPageCount = worksheetPdfDocument?.numPages ?? 0;
   const worksheetDocumentSize =
     isWorksheetImage && imageNaturalSize?.key === worksheetFileKey
       ? imageNaturalSize
@@ -465,14 +478,15 @@ export function ConsultationRoom({
   }, [queueBoardResize]);
 
   useEffect(() => {
-    const sourceUrl = isWorksheetPdf && worksheetFileUrl ? worksheetFileUrl : "";
-
     worksheetPdfRenderTaskRef.current?.cancel();
+    worksheetPdfRenderTaskRef.current = null;
+    worksheetPdfRenderVersionRef.current += 1;
 
-    if (!sourceUrl) {
+    if (!pdfSourceUrl) {
       return;
     }
 
+    const sourceUrl = pdfSourceUrl;
     let isMounted = true;
 
     async function loadPdf() {
@@ -490,12 +504,10 @@ export function ConsultationRoom({
           return;
         }
 
-        setWorksheetPdfDocument(loadedDocument);
-        setWorksheetPageCount(loadedDocument.numPages);
-
-        if (worksheetPageNumber > loadedDocument.numPages) {
-          onWorksheetPageChange(1);
-        }
+        setLoadedWorksheetPdf({
+          document: loadedDocument,
+          sourceUrl,
+        });
       } catch (error) {
         if (isMounted) {
           setWorksheetPdfError(
@@ -517,12 +529,16 @@ export function ConsultationRoom({
       isMounted = false;
       worksheetPdfRenderTaskRef.current?.cancel();
     };
-  }, [
-    isWorksheetPdf,
-    onWorksheetPageChange,
-    worksheetFileUrl,
-    worksheetPageNumber,
-  ]);
+  }, [pdfSourceUrl]);
+
+  useEffect(() => {
+    if (
+      worksheetPdfDocument &&
+      worksheetPageNumber > worksheetPdfDocument.numPages
+    ) {
+      onWorksheetPageChange(1);
+    }
+  }, [onWorksheetPageChange, worksheetPageNumber, worksheetPdfDocument]);
 
   useEffect(() => {
     if (!worksheetPdfDocument || !isWorksheetPdf) {
@@ -578,45 +594,75 @@ export function ConsultationRoom({
       return;
     }
 
-    worksheetPdfRenderTaskRef.current?.cancel();
+    const previousRenderTask = worksheetPdfRenderTaskRef.current;
+    previousRenderTask?.cancel();
+    const renderVersion = ++worksheetPdfRenderVersionRef.current;
     setWorksheetPdfError(null);
     setIsWorksheetPdfLoading(true);
 
     try {
+      await previousRenderTask?.promise.catch(() => undefined);
+      if (renderVersion !== worksheetPdfRenderVersionRef.current) {
+        return;
+      }
+
       const safePageNumber = Math.max(
         1,
         Math.min(worksheetPageNumber, worksheetPdfDocument.numPages),
       );
       const page = await worksheetPdfDocument.getPage(safePageNumber);
+      if (renderVersion !== worksheetPdfRenderVersionRef.current) {
+        return;
+      }
+
       const unscaledViewport = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({
         scale: Math.max(0.1, worksheetQuestionSize.width / unscaledViewport.width),
       });
       const pixelRatio = window.devicePixelRatio || 1;
-      const context = canvas.getContext("2d");
+      const renderCanvas = document.createElement("canvas");
+      const context = renderCanvas.getContext("2d");
 
       if (!context) {
         throw new Error("This browser cannot render the PDF worksheet.");
       }
 
-      canvas.width = Math.floor(viewport.width * pixelRatio);
-      canvas.height = Math.floor(viewport.height * pixelRatio);
-      canvas.style.width = `${worksheetQuestionSize.width}px`;
-      canvas.style.height = `${worksheetQuestionSize.height}px`;
+      renderCanvas.width = Math.floor(viewport.width * pixelRatio);
+      renderCanvas.height = Math.floor(viewport.height * pixelRatio);
 
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       context.clearRect(0, 0, viewport.width, viewport.height);
 
       const renderTask = page.render({
-        canvas,
+        canvas: renderCanvas,
         canvasContext: context,
         viewport,
       });
 
       worksheetPdfRenderTaskRef.current = renderTask;
       await renderTask.promise;
+      if (renderVersion !== worksheetPdfRenderVersionRef.current) {
+        return;
+      }
+
+      canvas.width = renderCanvas.width;
+      canvas.height = renderCanvas.height;
+      canvas.style.width = `${worksheetQuestionSize.width}px`;
+      canvas.style.height = `${worksheetQuestionSize.height}px`;
+
+      const visibleContext = canvas.getContext("2d");
+      if (!visibleContext) {
+        throw new Error("This browser cannot display the PDF worksheet.");
+      }
+
+      visibleContext.drawImage(renderCanvas, 0, 0);
+      setWorksheetPdfCanvasReadyFileKey(worksheetFileKey);
     } catch (error) {
       if (error instanceof Error && error.name === "RenderingCancelledException") {
+        return;
+      }
+
+      if (renderVersion !== worksheetPdfRenderVersionRef.current) {
         return;
       }
 
@@ -626,13 +672,17 @@ export function ConsultationRoom({
           : "Unable to render this PDF page on the whiteboard.",
       );
     } finally {
-      setIsWorksheetPdfLoading(false);
+      if (renderVersion === worksheetPdfRenderVersionRef.current) {
+        worksheetPdfRenderTaskRef.current = null;
+        setIsWorksheetPdfLoading(false);
+      }
     }
   }, [
     worksheetPageNumber,
     worksheetQuestionSize.height,
     worksheetQuestionSize.width,
     worksheetPdfDocument,
+    worksheetFileKey,
   ]);
 
   useEffect(() => {
@@ -640,18 +690,22 @@ export function ConsultationRoom({
       return;
     }
 
-    const frameId = window.requestAnimationFrame(() => {
-      void renderWorksheetPdfPage();
-    });
+    let frameId = 0;
+    const scheduleRender = () => {
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(() => {
+        void renderWorksheetPdfPage();
+      });
+    };
+
+    scheduleRender();
     const surface = worksheetSurfaceRef.current;
 
     if (!surface) {
       return () => window.cancelAnimationFrame(frameId);
     }
 
-    const observer = new ResizeObserver(() => {
-      void renderWorksheetPdfPage();
-    });
+    const observer = new ResizeObserver(scheduleRender);
     observer.observe(surface);
 
     return () => {
@@ -1288,7 +1342,9 @@ export function ConsultationRoom({
                       Open uploaded question file
                     </a>
                   )}
-                  {isWorksheetPdf && isWorksheetPdfLoading ? (
+                  {isWorksheetPdf &&
+                  isWorksheetPdfLoading &&
+                  worksheetPdfCanvasReadyFileKey !== worksheetFileKey ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-semibold text-slate-500">
                       Rendering question page...
                     </div>

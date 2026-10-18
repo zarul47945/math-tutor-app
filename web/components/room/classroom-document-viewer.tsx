@@ -41,13 +41,18 @@ export function ClassroomDocumentViewer({
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pageFrameRef = useRef<HTMLDivElement | null>(null);
-  const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
+  const renderTaskRef = useRef<{
+    cancel: () => void;
+    promise: Promise<void>;
+  } | null>(null);
+  const renderVersionRef = useRef(0);
   const uploadInputId = useId();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pageCount, setPageCount] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [pdfDocument, setPdfDocument] = useState<PdfDocumentProxy | null>(null);
+  const [renderedPdfUrl, setRenderedPdfUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
 
   const isPdf = isPdfWorksheet(worksheet);
@@ -160,12 +165,23 @@ export function ClassroomDocumentViewer({
       return;
     }
 
-    renderTaskRef.current?.cancel();
+    const previousRenderTask = renderTaskRef.current;
+    previousRenderTask?.cancel();
+    const renderVersion = ++renderVersionRef.current;
     setErrorMessage(null);
     setIsLoading(true);
 
     try {
+      await previousRenderTask?.promise.catch(() => undefined);
+      if (renderVersion !== renderVersionRef.current) {
+        return;
+      }
+
       const page = await pdfDocument.getPage(pageNumber);
+      if (renderVersion !== renderVersionRef.current) {
+        return;
+      }
+
       const unscaledViewport = page.getViewport({ scale: 1 });
       const maxWidth = Math.max(frame.clientWidth - 32, 320);
       const fitScale = maxWidth / unscaledViewport.width;
@@ -173,30 +189,49 @@ export function ClassroomDocumentViewer({
         scale: Math.max(0.35, Math.min(fitScale * zoom, 2.75)),
       });
       const pixelRatio = window.devicePixelRatio || 1;
-      const context = canvas.getContext("2d");
+      const renderCanvas = document.createElement("canvas");
+      const context = renderCanvas.getContext("2d");
 
       if (!context) {
         throw new Error("This browser cannot render the worksheet canvas.");
       }
 
-      canvas.width = Math.floor(viewport.width * pixelRatio);
-      canvas.height = Math.floor(viewport.height * pixelRatio);
-      canvas.style.width = `${viewport.width}px`;
-      canvas.style.height = `${viewport.height}px`;
+      renderCanvas.width = Math.floor(viewport.width * pixelRatio);
+      renderCanvas.height = Math.floor(viewport.height * pixelRatio);
 
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       context.clearRect(0, 0, viewport.width, viewport.height);
 
       const renderTask = page.render({
-        canvas,
+        canvas: renderCanvas,
         canvasContext: context,
         viewport,
       });
 
       renderTaskRef.current = renderTask;
       await renderTask.promise;
+      if (renderVersion !== renderVersionRef.current) {
+        return;
+      }
+
+      canvas.width = renderCanvas.width;
+      canvas.height = renderCanvas.height;
+      canvas.style.width = `${viewport.width}px`;
+      canvas.style.height = `${viewport.height}px`;
+
+      const visibleContext = canvas.getContext("2d");
+      if (!visibleContext) {
+        throw new Error("This browser cannot display the worksheet canvas.");
+      }
+
+      visibleContext.drawImage(renderCanvas, 0, 0);
+      setRenderedPdfUrl(pdfSourceUrl);
     } catch (error) {
       if (error instanceof Error && error.name === "RenderingCancelledException") {
+        return;
+      }
+
+      if (renderVersion !== renderVersionRef.current) {
         return;
       }
 
@@ -206,18 +241,27 @@ export function ClassroomDocumentViewer({
           : "Unable to render this PDF page.",
       );
     } finally {
-      setIsLoading(false);
+      if (renderVersion === renderVersionRef.current) {
+        renderTaskRef.current = null;
+        setIsLoading(false);
+      }
     }
-  }, [pageNumber, pdfDocument, zoom]);
+  }, [pageNumber, pdfDocument, pdfSourceUrl, zoom]);
 
   useEffect(() => {
     if (!pdfDocument) {
       return;
     }
 
-    const frameId = window.requestAnimationFrame(() => {
-      void renderPdfPage();
-    });
+    let frameId = 0;
+    const scheduleRender = () => {
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(() => {
+        void renderPdfPage();
+      });
+    };
+
+    scheduleRender();
 
     const frame = pageFrameRef.current;
 
@@ -225,9 +269,7 @@ export function ClassroomDocumentViewer({
       return () => window.cancelAnimationFrame(frameId);
     }
 
-    const observer = new ResizeObserver(() => {
-      void renderPdfPage();
-    });
+    const observer = new ResizeObserver(scheduleRender);
     observer.observe(frame);
 
     return () => {
@@ -361,7 +403,7 @@ export function ClassroomDocumentViewer({
         ) : isPdf ? (
           <div className="relative">
             <canvas className="rounded-xl bg-white shadow-lg" ref={canvasRef} />
-            {isLoading ? (
+            {isLoading && renderedPdfUrl !== pdfSourceUrl ? (
               <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/75 text-sm font-semibold text-slate-500">
                 Rendering page...
               </div>
