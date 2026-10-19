@@ -2,6 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <script>
+      // Browser modules and the shared API require the hosted game or localhost.
+      if (window.location.protocol === "file:") {
+        window.location.replace("https://math-tutor-app-lac.vercel.app/game");
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"

@@ -97,6 +97,8 @@ Next.js rewrites that URL to the standalone document in
 `public/air-math/index.html`; its scripts, worker, and underwater media stay under
 `/air-math/`. Use a normal browser navigation to enter the game so it controls its
 own camera and fullscreen lifecycle.
+Opening the HTML file directly from disk redirects to the published game; use
+`npm run dev` to test local changes.
 
 The same-origin `/api/air-math/leaderboard` endpoint connects to the existing
 public Air Math score service, preserving the shared rankings and score history
