@@ -134,3 +134,65 @@ select {
     font-size: 0.75rem;
   }
 }
+
+.geometry-instruments {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.geometry-instruments [role="button"]:focus-visible {
+  outline: 3px solid #f59e0b;
+  outline-offset: 4px;
+}
+
+.geometry-instrument-panel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  overflow-x: auto;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid #bae6fd;
+  border-radius: 0.75rem;
+  background: #f0f9ff;
+  color: #0c4a6e;
+  font-size: 0.75rem;
+}
+
+.geometry-instrument-panel button,
+.geometry-instrument-panel input[type="number"] {
+  flex-shrink: 0;
+  min-height: 2.25rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.55rem;
+  background: #fff;
+  color: #142033;
+  white-space: nowrap;
+}
+
+.geometry-instrument-panel input[type="number"] {
+  width: 4.5rem;
+}
+
+.geometry-instrument-panel input[type="range"] {
+  width: 6rem;
+  accent-color: #1769aa;
+}
+
+.geometry-instrument-panel button:disabled,
+.geometry-instrument-panel input:disabled {
+  opacity: 0.5;
+}
+
+.geometry-instrument-panel .geometry-draw-action {
+  border-color: #1769aa;
+  background: #1769aa;
+  color: #fff;
+}

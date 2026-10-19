@@ -1,4 +1,5 @@
 import type { SessionRoomState } from "@/lib/types";
+import type { GeometryConstruction, GeometryInstrument } from "@/lib/geometry-tools";
 import type {
   TherapyAnswerMap,
   TherapyInkStroke,
@@ -6,6 +7,7 @@ import type {
 } from "@/lib/therapy-demo";
 
 export const ROOM_SIGNAL_TOPIC = "tutor-room";
+export const GEOMETRY_SIGNAL_TOPIC = "tutor-geometry";
 
 export type WhiteboardPoint = {
   x: number;
@@ -30,6 +32,7 @@ export type WhiteboardStroke = {
   size: number;
   points: WhiteboardPoint[];
   tool: WhiteboardTool;
+  construction?: GeometryConstruction;
 };
 
 export type TimerSignalState = Pick<
@@ -38,6 +41,9 @@ export type TimerSignalState = Pick<
 >;
 
 export type RoomSignal =
+  | { type: "geometry.instrument"; instrument: GeometryInstrument }
+  | { type: "geometry.snapshot"; instruments: GeometryInstrument[] }
+  | { type: "geometry.request" }
   | {
       type: "timer.state";
       state: TimerSignalState;

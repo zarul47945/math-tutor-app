@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   ROOM_SIGNAL_TOPIC,
+  GEOMETRY_SIGNAL_TOPIC,
   decodeRoomSignal,
   encodeRoomSignal,
   type RoomSignal,
@@ -48,6 +49,7 @@ import {
 import { worksheetToTherapySets } from "@/lib/lesson-worksheet";
 import { fetchLiveKitToken } from "@/lib/livekit/token";
 import { createClient } from "@/lib/supabase/client";
+import { isGeometryInstrument, mergeGeometryInstrument, type GeometryInstrument } from "@/lib/geometry-tools";
 import {
   createSessionWorksheet,
   getActiveSessionRoomState,
@@ -390,6 +392,10 @@ function RoomExperience({
   const [isWorksheetUploadPending, setIsWorksheetUploadPending] = useState(false);
   const [whiteboardEnabled, setWhiteboardEnabled] = useState(false);
   const [whiteboardStrokes, setWhiteboardStrokes] = useState<WhiteboardStroke[]>([]);
+  const [geometryInstruments, setGeometryInstruments] = useState<GeometryInstrument[]>([]);
+  const geometryInstrumentsRef = useRef<GeometryInstrument[]>([]);
+  const geometryUpdatesRef = useRef(new Map<string, GeometryInstrument>());
+  const geometryBroadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [redoWhiteboardStrokes, setRedoWhiteboardStrokes] = useState<
     WhiteboardStroke[]
   >([]);
@@ -521,12 +527,44 @@ function RoomExperience({
     return snapshot;
   };
 
-  const { send } = useDataChannel(ROOM_SIGNAL_TOPIC, (message) => {
+  useDataChannel(GEOMETRY_SIGNAL_TOPIC, (message) => {
     const signal = decodeRoomSignal(message.payload);
 
     if (!signal) {
       return;
     }
+
+    if (signal.type === "geometry.request") {
+      void room.localParticipant.publishData(encodeRoomSignal({
+        type: "geometry.snapshot",
+        instruments: geometryInstrumentsRef.current,
+      }), { reliable: true, topic: GEOMETRY_SIGNAL_TOPIC }).catch(() => {
+        setFeedback("Unable to share the geometry instruments right now.");
+      });
+      return;
+    }
+
+    if (signal.type === "geometry.instrument" || signal.type === "geometry.snapshot") {
+      const incoming = signal.type === "geometry.instrument" ? [signal.instrument] : signal.instruments;
+      if (!Array.isArray(incoming)) return;
+      let next = geometryInstrumentsRef.current;
+      for (const instrument of incoming) {
+        if (isGeometryInstrument(instrument) && (signal.type === "geometry.snapshot" || instrument.owner !== role)) {
+          next = mergeGeometryInstrument(next, instrument);
+        }
+      }
+      if (next !== geometryInstrumentsRef.current) {
+        geometryInstrumentsRef.current = next;
+        setGeometryInstruments(next);
+      }
+      return;
+    }
+
+  });
+
+  const { send } = useDataChannel(ROOM_SIGNAL_TOPIC, (message) => {
+    const signal = decodeRoomSignal(message.payload);
+    if (!signal) return;
 
     if (signal.type === "timer.state") {
       setTimerNow(Date.now());
@@ -581,6 +619,7 @@ function RoomExperience({
       return;
     }
 
+    if (signal.type !== "whiteboard.stroke") return;
     setWhiteboardStrokes((currentStrokes) => {
       if (currentStrokes.some((stroke) => stroke.id === signal.stroke.id)) {
         return currentStrokes;
@@ -860,6 +899,42 @@ function RoomExperience({
       );
     }
   }, [connectionState, send]);
+
+  const handleGeometryInstrumentChange = useCallback((instrument: GeometryInstrument) => {
+    if (instrument.owner !== role) return;
+    const previous = geometryInstrumentsRef.current.find((item) => item.id === instrument.id);
+    const nextInstrument = { ...instrument, revision: Math.max(Date.now(), (previous?.revision ?? 0) + 1) };
+    if (!isGeometryInstrument(nextInstrument)) return;
+    const next = mergeGeometryInstrument(geometryInstrumentsRef.current, nextInstrument);
+    geometryInstrumentsRef.current = next;
+    setGeometryInstruments(next);
+    geometryUpdatesRef.current.set(nextInstrument.id, nextInstrument);
+    if (geometryBroadcastTimerRef.current) return;
+    geometryBroadcastTimerRef.current = setTimeout(() => {
+      geometryBroadcastTimerRef.current = null;
+      const pending = [...geometryUpdatesRef.current.values()];
+      geometryUpdatesRef.current.clear();
+      for (const item of pending) {
+        if (connectionState === "connected") {
+          void room.localParticipant.publishData(encodeRoomSignal({ type: "geometry.instrument", instrument: item }), {
+            reliable: true, topic: GEOMETRY_SIGNAL_TOPIC,
+          }).catch(() => setFeedback("Unable to share the geometry instruments right now."));
+        }
+      }
+    }, 60);
+  }, [role, room, connectionState]);
+
+  useEffect(() => {
+    if (connectionState === "connected") {
+      void room.localParticipant.publishData(encodeRoomSignal({ type: "geometry.request" }), {
+        reliable: true, topic: GEOMETRY_SIGNAL_TOPIC,
+      }).catch(() => setFeedback("Unable to refresh the geometry instruments right now."));
+    }
+  }, [connectionState, remoteParticipants.length, room]);
+
+  useEffect(() => () => {
+    if (geometryBroadcastTimerRef.current) clearTimeout(geometryBroadcastTimerRef.current);
+  }, []);
 
   const handleConsultationWorksheetPageChange = useCallback(
     (pageNumber: number) => {
@@ -1299,6 +1374,8 @@ function RoomExperience({
   if (sessionState.lesson_mode === "consultation") {
     return (
       <ConsultationRoom
+        geometryInstruments={geometryInstruments}
+        onGeometryInstrumentChange={handleGeometryInstrumentChange}
         cameraEnabled={isLocalCameraActive}
         canRedo={redoWhiteboardStrokes.some((stroke) => stroke.author === role)}
         canUndo={whiteboardStrokes.some((stroke) => stroke.author === role)}
@@ -1428,6 +1505,8 @@ function RoomExperience({
 
         {whiteboardEnabled ? (
           <WhiteboardOverlay
+            geometryInstruments={geometryInstruments}
+            onGeometryInstrumentChange={handleGeometryInstrumentChange}
             cameraParticipants={whiteboardCameraParticipants}
             canRedo={redoWhiteboardStrokes.some((stroke) => stroke.author === role)}
             canUndo={whiteboardStrokes.some((stroke) => stroke.author === role)}

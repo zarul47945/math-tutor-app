@@ -15,9 +15,11 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 
 import { ClassroomDocumentViewer } from "@/components/room/classroom-document-viewer";
 import { useBoardFullscreen } from "@/components/room/use-board-fullscreen";
+import { GeometryInstrumentPanel, GeometryInstruments } from "@/components/room/geometry-instruments";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { drawGeometryStroke } from "@/lib/livekit/draw-geometry-stroke";
+import { createGeometryInstrument, isGeometryTool, type GeometryInstrument } from "@/lib/geometry-tools";
 import type {
   WhiteboardPoint,
   WhiteboardStroke,
@@ -211,6 +213,8 @@ function ConsultationVideoTile({
 }
 
 export function ConsultationRoom({
+  geometryInstruments,
+  onGeometryInstrumentChange,
   canRedo,
   canUndo,
   cameraEnabled,
@@ -242,6 +246,8 @@ export function ConsultationRoom({
   worksheetPageNumber,
   worksheetUploadPending,
 }: {
+  geometryInstruments: GeometryInstrument[];
+  onGeometryInstrumentChange: (instrument: GeometryInstrument) => void;
   canRedo: boolean;
   canUndo: boolean;
   cameraEnabled: boolean;
@@ -338,6 +344,7 @@ export function ConsultationRoom({
         : null;
   const currentStrokeColor = selectedTool === "eraser" ? "#ffffff" : selectedColor;
   const canClear = whiteboardStrokes.length > 0;
+  const activeInstrument = geometryInstruments.find((item) => item.owner === role && item.kind === selectedTool && item.visible);
   const isWorksheetPdf = isPdfWorksheet(worksheet);
   const isWorksheetImage = isImageWorksheet(worksheet);
   const canUploadWorksheet = role === "teacher" && Boolean(onUploadWorksheetFile);
@@ -831,6 +838,17 @@ export function ConsultationRoom({
       return;
     }
 
+    if (isGeometryTool(selectedTool)) {
+      const instrument = geometryInstruments.find((item) => item.owner === role && item.kind === selectedTool);
+      if (!instrument?.locked) {
+        onGeometryInstrumentChange({
+          ...(instrument ?? createGeometryInstrument(selectedTool, role, worksheetContentSize.width, worksheetContentSize.height)),
+          x: point.x, y: point.y, visible: true,
+        });
+      }
+      return;
+    }
+
     currentStrokeRef.current = {
       author: role,
       color: currentStrokeColor,
@@ -953,6 +971,25 @@ export function ConsultationRoom({
     surface.scrollLeft += event.deltaY;
   };
 
+  const selectWhiteboardTool = (tool: WhiteboardTool, fitToView = false) => {
+    setIsPanMode(false);
+    setSelectedTool(tool);
+    if (!isGeometryTool(tool)) return;
+    const previous = geometryInstruments.find((item) => item.owner === role && item.kind === tool);
+    if (previous?.visible && !fitToView) return;
+    const surface = worksheetSurfaceRef.current;
+    const placement = createGeometryInstrument(tool, role, worksheetContentSize.width, worksheetContentSize.height, surface ? {
+      left: surface.scrollLeft,
+      top: surface.scrollTop,
+      width: surface.clientWidth,
+      height: surface.clientHeight,
+    } : undefined);
+    onGeometryInstrumentChange(previous ? {
+      ...previous, x: placement.x, y: placement.y, visible: true,
+      ...(fitToView ? { size: placement.size, radius: placement.radius } : {}),
+    } : placement);
+  };
+
   const renderToolControls = (compact = false) => (
     <div
       aria-label="Drawing tools"
@@ -974,10 +1011,7 @@ export function ConsultationRoom({
           }`}
           key={tool}
           aria-pressed={!isPanMode && selectedTool === tool}
-          onClick={() => {
-            setIsPanMode(false);
-            setSelectedTool(tool);
-          }}
+          onClick={() => selectWhiteboardTool(tool)}
           type="button"
         >
           {label}
@@ -1276,6 +1310,16 @@ export function ConsultationRoom({
                 Clear board
               </Button>
             </div>
+            {activeInstrument ? (
+              <GeometryInstrumentPanel
+                instrument={activeInstrument}
+                onChange={onGeometryInstrumentChange}
+                onStrokeComplete={onStrokeComplete}
+                color={selectedColor}
+                size={selectedSize}
+                onFitToView={() => selectWhiteboardTool(activeInstrument.kind, true)}
+              />
+            ) : null}
           </div>
           {fullscreenErrorMessage ? (
             <div
@@ -1382,6 +1426,18 @@ export function ConsultationRoom({
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
                   ref={canvasRef}
+                />
+                <GeometryInstruments
+                  instruments={geometryInstruments}
+                  role={role}
+                  width={worksheetContentSize.width}
+                  height={worksheetContentSize.height}
+                  color={selectedColor}
+                  size={selectedSize}
+                  lineScale={questionZoom}
+                  onChange={onGeometryInstrumentChange}
+                  onStrokeComplete={onStrokeComplete}
+                  onSelect={(kind) => { setIsPanMode(false); setSelectedTool(kind); }}
                 />
               </div>
             </div>

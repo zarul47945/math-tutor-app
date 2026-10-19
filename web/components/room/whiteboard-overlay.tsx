@@ -10,7 +10,9 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { GeometryInstrumentPanel, GeometryInstruments } from "@/components/room/geometry-instruments";
 import { drawGeometryStroke } from "@/lib/livekit/draw-geometry-stroke";
+import { createGeometryInstrument, isGeometryTool, type GeometryInstrument } from "@/lib/geometry-tools";
 import type {
   WhiteboardPoint,
   WhiteboardStroke,
@@ -180,6 +182,8 @@ function WhiteboardCameraTile({
 }
 
 export function WhiteboardOverlay({
+  geometryInstruments,
+  onGeometryInstrumentChange,
   cameraParticipants,
   canRedo,
   canUndo,
@@ -192,6 +196,8 @@ export function WhiteboardOverlay({
   role,
   strokes,
 }: {
+  geometryInstruments: GeometryInstrument[];
+  onGeometryInstrumentChange: (instrument: GeometryInstrument) => void;
   cameraParticipants: Array<{
     participant: Participant;
     trackRef: TrackReferenceOrPlaceholder | null;
@@ -219,6 +225,7 @@ export function WhiteboardOverlay({
   const [isCameraDockMinimized, setIsCameraDockMinimized] = useState(false);
   const [selectedSize, setSelectedSize] = useState(4);
   const [selectedTool, setSelectedTool] = useState<WhiteboardTool>("pen");
+  const activeInstrument = geometryInstruments.find((item) => item.owner === role && item.kind === selectedTool && item.visible);
   const strokeColor = useMemo(
     () => (selectedTool === "eraser" ? "#ffffff" : selectedColor),
     [selectedColor, selectedTool],
@@ -307,6 +314,15 @@ export function WhiteboardOverlay({
       return;
     }
 
+    if (isGeometryTool(selectedTool)) {
+      const instrument = geometryInstruments.find((item) => item.owner === role && item.kind === selectedTool);
+      if (!instrument?.locked) onGeometryInstrumentChange({
+        ...(instrument ?? createGeometryInstrument(selectedTool, role, canvasSize.width, canvasSize.height)),
+        x: point.x, y: point.y, visible: true,
+      });
+      return;
+    }
+
     const nextStroke: WhiteboardStroke = {
       author: role,
       color: strokeColor,
@@ -359,7 +375,19 @@ export function WhiteboardOverlay({
     }
 
     finishStroke();
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  const selectWhiteboardTool = (tool: WhiteboardTool, fitToView = false) => {
+    setSelectedTool(tool);
+    if (!isGeometryTool(tool) || !canvasSize.width || !canvasSize.height) return;
+    const previous = geometryInstruments.find((item) => item.owner === role && item.kind === tool);
+    if (previous?.visible && !fitToView) return;
+    const placement = createGeometryInstrument(tool, role, canvasSize.width, canvasSize.height);
+    onGeometryInstrumentChange(previous ? {
+      ...previous, x: placement.x, y: placement.y, visible: true,
+      ...(fitToView ? { size: placement.size, radius: placement.radius } : {}),
+    } : placement);
   };
 
   if (!enabled) {
@@ -434,7 +462,8 @@ export function WhiteboardOverlay({
                           ? "border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary-strong)]"
                           : "border-[var(--color-border)] bg-white text-[var(--color-text)] hover:bg-[var(--color-surface-soft)]"
                       }`}
-                      onClick={() => setSelectedTool(tool)}
+                      aria-pressed={selectedTool === tool}
+                      onClick={() => selectWhiteboardTool(tool)}
                       type="button"
                     >
                       {toolLabel(tool)}
@@ -442,6 +471,12 @@ export function WhiteboardOverlay({
                   ))}
                 </div>
               </section>
+
+              {activeInstrument ? (
+                <GeometryInstrumentPanel instrument={activeInstrument} onChange={onGeometryInstrumentChange}
+                  onFitToView={() => selectWhiteboardTool(activeInstrument.kind, true)}
+                  onStrokeComplete={onStrokeComplete} color={selectedColor} size={selectedSize} />
+              ) : null}
 
               <section className="space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-text-soft)]">
@@ -590,6 +625,9 @@ export function WhiteboardOverlay({
                 onPointerUp={handlePointerUp}
                 ref={canvasRef}
               />
+              <GeometryInstruments instruments={geometryInstruments} role={role}
+                width={canvasSize.width} height={canvasSize.height} color={selectedColor} size={selectedSize}
+                onChange={onGeometryInstrumentChange} onStrokeComplete={onStrokeComplete} onSelect={setSelectedTool} />
             </div>
           </section>
         </div>

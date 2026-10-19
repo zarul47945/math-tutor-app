@@ -7,6 +7,40 @@ export function drawGeometryStroke(
   width: number,
   lineScale = 1,
 ) {
+  if (stroke.construction && stroke.points[0]) {
+    const shape = stroke.construction;
+    context.save();
+    context.translate(stroke.points[0].x * width, stroke.points[0].y * height);
+    context.beginPath();
+    if (shape.kind === "arc") {
+      context.arc(0, 0, shape.radius * width, shape.startAngle * Math.PI / 180, (shape.startAngle + shape.sweep) * Math.PI / 180, shape.sweep < 0);
+    } else {
+      context.rotate(shape.rotation * Math.PI / 180);
+      const length = shape.length * width;
+      context.moveTo(0, 0);
+      context.lineTo(length, 0);
+      if (shape.kind === "triangle") {
+        context.lineTo(0, -length);
+        context.closePath();
+      } else if (shape.kind === "angle") {
+        const radians = -shape.angle * Math.PI / 180;
+        context.moveTo(0, 0);
+        context.lineTo(length * Math.cos(radians), length * Math.sin(radians));
+        context.stroke();
+        context.beginPath();
+        const radius = Math.min(length * 0.3, 38 * lineScale);
+        context.arc(0, 0, radius, 0, radians, true);
+        context.fillStyle = stroke.color;
+        context.font = `${Math.max(12, 13 * lineScale)}px sans-serif`;
+        context.textAlign = "center";
+        context.fillText(`${shape.angle}°`, (radius + 18 * lineScale) * Math.cos(radians / 2), (radius + 18 * lineScale) * Math.sin(radians / 2));
+      }
+    }
+    context.stroke();
+    context.restore();
+    return true;
+  }
+
   if (
     stroke.tool !== "ruler" &&
     stroke.tool !== "compass" &&
