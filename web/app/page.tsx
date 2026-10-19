@@ -2,6 +2,7 @@ import {
   ArrowRight,
   BookOpenCheck,
   CalendarCheck,
+  Gamepad2,
   GraduationCap,
   MonitorPlay,
   PenTool,
@@ -87,6 +88,14 @@ export default function HomePage() {
                 Teacher or admin
               </Link>
             </div>
+
+            <a
+              href="/game"
+              className="mt-3 inline-flex min-h-12 items-center justify-center rounded-xl border border-[#ab7b13]/30 bg-[#fff5de] px-5 text-sm font-semibold text-[#704600] transition hover:border-[#ab7b13] hover:bg-[#ffedc6] sm:w-auto"
+            >
+              <Gamepad2 className="mr-2" size={18} />
+              Play Air Math with your camera
+            </a>
 
             <p className="mt-5 text-sm text-[var(--color-text-soft)]">
               Works in your web browser on phones, tablets, and computers.

@@ -90,6 +90,20 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Air Math
+
+The public camera game is available at `/game`, with a link on the homepage.
+Next.js rewrites that URL to the standalone document in
+`public/air-math/index.html`; its scripts, worker, and underwater media stay under
+`/air-math/`. Use a normal browser navigation to enter the game so it controls its
+own camera and fullscreen lifecycle.
+
+The same-origin `/api/air-math/leaderboard` endpoint connects to the existing
+public Air Math score service, preserving the shared rankings and score history
+across both URLs. That service must remain deployed until its storage is
+migrated. No extra database credentials are needed in this Vercel project.
+Camera frames and hand tracking remain on the player's device.
+
 ## Test a teacher and student call
 
 1. Open the app in two separate browser windows or two different browser profiles.
