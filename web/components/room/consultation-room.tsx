@@ -14,6 +14,7 @@ import type {
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { ClassroomDocumentViewer } from "@/components/room/classroom-document-viewer";
+import { useBoardFullscreen } from "@/components/room/use-board-fullscreen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { drawGeometryStroke } from "@/lib/livekit/draw-geometry-stroke";
@@ -311,10 +312,15 @@ export function ConsultationRoom({
   const [selectedTool, setSelectedTool] = useState<WhiteboardTool>("pen");
   const [isPanning, setIsPanning] = useState(false);
   const [showBottomToolbar, setShowBottomToolbar] = useState(true);
-  const [isBoardFullscreen, setIsBoardFullscreen] = useState(false);
-  const [fullscreenErrorMessage, setFullscreenErrorMessage] = useState<
-    string | null
-  >(null);
+  const [showBoardOptions, setShowBoardOptions] = useState(false);
+  const {
+    buttonLabel: fullscreenButtonLabel,
+    errorMessage: fullscreenErrorMessage,
+    isActive: isBoardExpanded,
+    isExpanded: isExpandedView,
+    isPending: isFullscreenPending,
+    toggleFullscreen: handleToggleBrowserFullscreen,
+  } = useBoardFullscreen(boardRef);
   const remoteParticipant = remoteParticipants[0] ?? null;
   const tutorParticipant = role === "teacher" ? localParticipant : remoteParticipant;
   const studentParticipant = role === "student" ? localParticipant : remoteParticipant;
@@ -401,12 +407,8 @@ export function ConsultationRoom({
     worksheetQuestionSize.height,
     worksheetQuestionSize.width,
   ]);
-  const boardClassName = isBoardFullscreen
-    ? "relative h-screen w-screen overflow-hidden rounded-none bg-white shadow-2xl"
-    : "relative min-h-[58vh] overflow-hidden rounded-2xl bg-white shadow-2xl lg:min-h-[62vh]";
-  const worksheetSurfaceClassName = isBoardFullscreen
-    ? "absolute inset-x-4 bottom-28 top-20 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-inner"
-    : "absolute inset-x-4 bottom-4 top-20 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-inner";
+  const worksheetSurfaceClassName =
+    "relative min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain rounded-2xl border border-slate-200 bg-white shadow-inner";
   const worksheetContentFrameClassName =
     questionZoom > 1.01
       ? "flex min-h-full min-w-full items-start justify-start p-4"
@@ -469,23 +471,15 @@ export function ConsultationRoom({
   }, [resizeBoardCanvas]);
 
   useEffect(() => {
-    const syncFullscreenState = () => {
-      const isFullscreen = document.fullscreenElement === boardRef.current;
-
-      setIsBoardFullscreen(isFullscreen);
-      if (isFullscreen) {
-        setFullscreenErrorMessage(null);
-      }
-      queueBoardResize();
-    };
-
-    syncFullscreenState();
-    document.addEventListener("fullscreenchange", syncFullscreenState);
+    queueBoardResize();
+    window.addEventListener("resize", queueBoardResize);
+    window.visualViewport?.addEventListener("resize", queueBoardResize);
 
     return () => {
-      document.removeEventListener("fullscreenchange", syncFullscreenState);
+      window.removeEventListener("resize", queueBoardResize);
+      window.visualViewport?.removeEventListener("resize", queueBoardResize);
     };
-  }, [queueBoardResize]);
+  }, [isBoardExpanded, queueBoardResize]);
 
   useEffect(() => {
     worksheetPdfRenderTaskRef.current?.cancel();
@@ -915,33 +909,6 @@ export function ConsultationRoom({
     setIsPanMode((isMoving) => !isMoving);
   };
 
-  const handleToggleBrowserFullscreen = async () => {
-    const board = boardRef.current;
-
-    if (!board) {
-      return;
-    }
-
-    setFullscreenErrorMessage(null);
-
-    try {
-      if (document.fullscreenElement === board) {
-        await document.exitFullscreen();
-      } else if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else {
-        await board.requestFullscreen();
-      }
-
-      queueBoardResize();
-    } catch {
-      setFullscreenErrorMessage(
-        "Could not open browser fullscreen. Please press F11 manually.",
-      );
-      queueBoardResize();
-    }
-  };
-
   const setClampedQuestionZoom = (nextZoom: number) => {
     setQuestionZoom(Math.min(3, Math.max(0.5, Number(nextZoom.toFixed(2)))));
     queueBoardResize();
@@ -987,7 +954,15 @@ export function ConsultationRoom({
   };
 
   const renderToolControls = (compact = false) => (
-    <div className={`flex flex-wrap gap-2 ${compact ? "max-w-5xl" : ""}`}>
+    <div
+      aria-label="Drawing tools"
+      role="toolbar"
+      className={`flex gap-2 ${
+        compact
+          ? "max-w-full flex-nowrap overflow-x-auto pb-1 [&>*]:shrink-0"
+          : "flex-wrap"
+      }`}
+    >
       {tools.map(([tool, label]) => (
         <button
           className={`min-h-12 rounded-xl border px-4 text-sm font-semibold transition ${
@@ -998,6 +973,7 @@ export function ConsultationRoom({
                 : "border-white/10 bg-white/5 text-white hover:bg-white/10"
           }`}
           key={tool}
+          aria-pressed={!isPanMode && selectedTool === tool}
           onClick={() => {
             setIsPanMode(false);
             setSelectedTool(tool);
@@ -1055,12 +1031,15 @@ export function ConsultationRoom({
       <Button disabled={!canClear} onClick={onClearWhiteboard} variant="secondary">
         Clear All
       </Button>
-      <Button
-        onClick={handleToggleBrowserFullscreen}
-        variant={isBoardFullscreen ? "primary" : "secondary"}
-      >
-        {isBoardFullscreen ? "Exit full screen" : "Full screen"}
-      </Button>
+      {!compact ? (
+        <Button
+          disabled={isFullscreenPending}
+          onClick={handleToggleBrowserFullscreen}
+          variant={isBoardExpanded ? "primary" : "secondary"}
+        >
+          {fullscreenButtonLabel}
+        </Button>
+      ) : null}
     </div>
   );
 
@@ -1127,14 +1106,48 @@ export function ConsultationRoom({
         </section>
 
         <section
-          className={boardClassName}
+          aria-label="Question whiteboard"
+          className="classroom-question-board"
+          data-expanded={isBoardExpanded}
           ref={boardRef}
         >
-          <div className="pointer-events-none absolute inset-x-4 top-4 z-30 flex flex-wrap items-center justify-between gap-3">
-            <div className="rounded-2xl bg-white/90 px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-950 shadow-lg backdrop-blur">
-              Question whiteboard
+          <div className="classroom-board-header relative z-30 max-h-[40%] shrink-0 overflow-y-auto rounded-xl bg-white/95 p-1">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="px-2 py-1 text-xs font-black uppercase tracking-[0.12em] text-slate-950 sm:text-sm">
+                Question whiteboard
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  aria-expanded={showBoardOptions}
+                  className="px-3 sm:hidden"
+                  onClick={() => setShowBoardOptions((isVisible) => !isVisible)}
+                  variant="secondary"
+                >
+                  {showBoardOptions ? "Hide options" : "Board options"}
+                </Button>
+                <Button
+                  disabled={isFullscreenPending}
+                  onClick={handleToggleBrowserFullscreen}
+                  variant={isBoardExpanded ? "primary" : "secondary"}
+                >
+                  {fullscreenButtonLabel}
+                </Button>
+                <Button
+                  onClick={() => setShowBottomToolbar((isVisible) => !isVisible)}
+                  variant="secondary"
+                >
+                  {showBottomToolbar ? "Hide tools" : "Show tools"}
+                </Button>
+              </div>
             </div>
-            <div className="pointer-events-auto flex flex-wrap gap-2">
+            {isExpandedView ? (
+              <p className="px-2 py-1 text-xs text-slate-500" role="status">
+                Expanded view. Your browser may keep its navigation bar visible.
+              </p>
+            ) : null}
+            <div
+              className={`${showBoardOptions ? "flex" : "hidden"} flex-nowrap gap-2 overflow-x-auto py-2 sm:flex sm:flex-wrap [&>*]:shrink-0`}
+            >
               {canUploadWorksheet ? (
                 <>
                   <label
@@ -1262,22 +1275,13 @@ export function ConsultationRoom({
               >
                 Clear board
               </Button>
-              <Button
-                onClick={handleToggleBrowserFullscreen}
-                variant={isBoardFullscreen ? "primary" : "secondary"}
-              >
-                {isBoardFullscreen ? "Exit full screen" : "Full screen"}
-              </Button>
-              <Button
-                onClick={() => setShowBottomToolbar((isVisible) => !isVisible)}
-                variant="secondary"
-              >
-                {showBottomToolbar ? "Hide tools" : "Show tools"}
-              </Button>
             </div>
           </div>
           {fullscreenErrorMessage ? (
-            <div className="absolute left-4 top-24 z-30 max-w-md rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 shadow-lg">
+            <div
+              className="shrink-0 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900"
+              role="status"
+            >
               {fullscreenErrorMessage}
             </div>
           ) : null}
@@ -1382,15 +1386,18 @@ export function ConsultationRoom({
               </div>
             </div>
           </div>
-          {isBoardFullscreen && showBottomToolbar ? (
-            <div className="absolute inset-x-4 bottom-4 z-30 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
+          {isBoardExpanded && showBottomToolbar ? (
+            <div className="relative z-30 min-w-0 shrink-0 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg">
+              <p className="mb-1 text-xs font-semibold text-slate-500 sm:hidden">
+                Tools: swipe for more
+              </p>
               {renderToolControls(true)}
             </div>
           ) : null}
         </section>
 
         <footer className="grid gap-3 rounded-2xl border border-white/10 bg-black/40 p-3 shadow-2xl backdrop-blur xl:grid-cols-[1fr_auto_auto] xl:items-center">
-          {renderToolControls()}
+          {showBottomToolbar ? renderToolControls() : null}
 
           <div className="rounded-xl bg-white/5 px-5 py-3 text-sm">
             <p className="text-white/70">Time Left</p>
