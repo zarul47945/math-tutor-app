@@ -55,6 +55,8 @@ const MODES = {
 
 const video = document.querySelector("#camera");
 const underwaterBackgroundVideo = document.querySelector("#underwater-background-video");
+const underwaterBackgroundMusic = document.querySelector("#underwater-background-music");
+underwaterBackgroundMusic.volume = 0.22;
 const stage = document.querySelector("#stage");
 const stageContent = document.querySelector("#stage-content");
 const canvas = document.querySelector("#hand-canvas");
@@ -380,6 +382,14 @@ function renderModeChoices() {
   modeDescription.textContent = `${gameMode === "underwater" ? "Underwater mode" : "Static mode"}: ${MODES[gameMode].description}`;
 }
 
+function syncUnderwaterMusic() {
+  if (gameMode !== "underwater" || document.hidden) {
+    underwaterBackgroundMusic.pause();
+    return;
+  }
+  if (underwaterBackgroundMusic.paused) void underwaterBackgroundMusic.play().catch(() => {});
+}
+
 function openPanel({ icon = "⌁", title, message, button, action, disabled = false }) {
   panelIcon.textContent = icon;
   panelTitle.textContent = title;
@@ -491,6 +501,7 @@ function startRound() {
   spawnUnderwaterBubbles();
   startQuestionTimer();
   unlockAudio();
+  syncUnderwaterMusic();
   setFeedback(`Question 1 of ${ROUND_LENGTH}. Point at an answer, then pinch your thumb and index finger together.`);
   closePanel();
 }
@@ -1425,6 +1436,7 @@ function selectMode(nextMode) {
   if (!MODES[nextMode] || gamePlaying || cameraStatus === "starting") return;
   gameMode = nextMode;
   renderModeChoices();
+  syncUnderwaterMusic();
   const cutoutMessage = gameMode === "underwater" && cameraStatus === "ready" && !imageSegmenter && !workerSegmentationReady
     ? " Preparing your hand cutout…"
     : "";
@@ -1535,8 +1547,13 @@ window.addEventListener("keydown", (event) => {
   if (Number.isInteger(index) && index >= 0 && index < 3) { event.preventDefault(); selectAnswer(index); }
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) underwaterBackgroundVideo.pause();
-  else if (gameMode === "underwater") void underwaterBackgroundVideo.play().catch(() => {});
+  if (document.hidden) {
+    underwaterBackgroundVideo.pause();
+    underwaterBackgroundMusic.pause();
+  } else if (gameMode === "underwater") {
+    void underwaterBackgroundVideo.play().catch(() => {});
+    syncUnderwaterMusic();
+  }
   if (document.hidden && stream) {
     cleanUpCamera(); resetRound("Camera paused while this tab was in the background. Turn it on to continue."); cameraStatus = "idle";
     openPanel({ icon: "⌁", title: "Camera paused", message: "Turn on your camera to continue playing.", button: "Turn on camera", action: startCamera });
