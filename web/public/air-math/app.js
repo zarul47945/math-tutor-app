@@ -383,7 +383,7 @@ function renderModeChoices() {
 }
 
 function syncUnderwaterMusic() {
-  if (gameMode !== "underwater" || document.hidden) {
+  if (gameMode !== "underwater" || !gamePlaying || document.hidden) {
     underwaterBackgroundMusic.pause();
     return;
   }
@@ -453,6 +453,7 @@ function resetRound(message) {
   stopQuestionTimer();
   questionTimeElement.textContent = "0.0s";
   gamePlaying = false;
+  syncUnderwaterMusic();
   answerLocked = false;
   roundFinished = false;
   questionsAnswered = 0;
@@ -754,6 +755,7 @@ function animateAnswer(correct) {
 
 function finishRound() {
   gamePlaying = false;
+  syncUnderwaterMusic();
   answerLocked = true;
   roundFinished = true;
   pinchArmed = false;
@@ -1559,7 +1561,10 @@ document.addEventListener("visibilitychange", () => {
     openPanel({ icon: "⌁", title: "Camera paused", message: "Turn on your camera to continue playing.", button: "Turn on camera", action: startCamera });
   }
 });
-window.addEventListener("pagehide", cleanUpCamera);
+window.addEventListener("pagehide", () => {
+  underwaterBackgroundMusic.pause();
+  cleanUpCamera();
+});
 if (window.ResizeObserver) new ResizeObserver(refreshStageMetrics).observe(stageContent);
 window.addEventListener("resize", refreshStageMetrics);
 cursor.style.left = "0";

@@ -96,8 +96,8 @@ The public camera game is available at `/game`, with a link on the homepage.
 Next.js rewrites that URL to the standalone document in
 `public/air-math/index.html`; its scripts, worker, and underwater media stay under
 `/air-math/`. Use a normal browser navigation to enter the game so it controls its
-own camera and fullscreen lifecycle. The underwater soundtrack plays only while
-underwater mode is selected, pauses in static mode, and is stored as
+own camera and fullscreen lifecycle. The underwater soundtrack plays only during
+an active round in underwater mode, pauses when the round stops, and is stored as
 `public/air-math/underwater-background-song.mp3`.
 Opening the HTML file directly from disk redirects to the published game; use
 `npm run dev` to test local changes.
