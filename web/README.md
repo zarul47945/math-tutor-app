@@ -98,7 +98,8 @@ Next.js rewrites that URL to the standalone document in
 `/air-math/`. Use a normal browser navigation to enter the game so it controls its
 own camera and fullscreen lifecycle. The underwater soundtrack plays only during
 an active round in underwater mode, pauses when the round stops, and is stored as
-`public/air-math/underwater-background-song.mp3`.
+`public/air-math/underwater-background-song.mp3`. The in-stage Sound settings let
+players adjust or mute music and effects separately; each volume is saved locally.
 Opening the HTML file directly from disk redirects to the published game; use
 `npm run dev` to test local changes.
 

@@ -65,8 +65,18 @@
       #hand-canvas { z-index: 2; }
       .underwater-mode .wash { background: linear-gradient(180deg, rgba(8,47,73,.04), rgba(8,47,73,.18) 70%, rgba(2,44,54,.42)); }
       .underwater-mode .grid { display: none; }
-      .stage-fullscreen { position: absolute; z-index: 7; top: 12px; right: 12px; padding: 9px 12px; border: 1px solid rgba(255,255,255,.2); border-radius: 13px; background: rgba(2,6,23,.9); color: #f8fafc; font-size: .78rem; font-weight: 800; cursor: pointer; }
-      .stage-fullscreen:hover { background: rgba(15,23,42,.94); }
+      .stage-controls { position: absolute; z-index: 8; top: 12px; right: 12px; display: flex; align-items: flex-start; gap: 8px; }
+      .stage-fullscreen, .stage-sound-settings { padding: 9px 12px; border: 1px solid rgba(255,255,255,.2); border-radius: 13px; background: rgba(2,6,23,.9); color: #f8fafc; font-size: .78rem; font-weight: 800; cursor: pointer; }
+      .stage-controls button:hover { background: rgba(15,23,42,.96); }
+      .stage-controls button:focus-visible, .sound-settings-panel button:focus-visible, .sound-setting input:focus-visible { outline: 3px solid #67e8f9; outline-offset: 2px; }
+      .sound-settings-panel { position: absolute; z-index: 9; top: 58px; right: 12px; display: grid; width: min(280px, calc(100% - 24px)); gap: 12px; padding: 15px; border: 1px solid rgba(255,255,255,.25); border-radius: 18px; background: rgba(2,6,23,.96); box-shadow: 0 14px 36px rgba(0,0,0,.45); backdrop-filter: blur(12px); color: #f8fafc; }
+      .sound-settings-panel[hidden] { display: none; }
+      .sound-settings-panel h2 { margin: 0; font-size: 1rem; }
+      .sound-setting { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; }
+      .sound-setting label { color: #e2e8f0; font-size: .84rem; font-weight: 750; }
+      .sound-setting output { min-width: 42px; color: #a5f3fc; font-size: .78rem; font-weight: 800; text-align: right; }
+      .sound-setting input { grid-column: 1 / -1; width: 100%; margin: 0; accent-color: #22d3ee; cursor: pointer; }
+      .sound-settings-done { justify-self: end; padding: 7px 12px; border: 1px solid rgba(255,255,255,.22); border-radius: 10px; background: #164e63; color: #f0fdff; font-weight: 800; cursor: pointer; }
       .stage-hud { position: absolute; z-index: 5; top: 12px; left: 12px; display: flex; gap: 8px; pointer-events: none; }
       .hud-chip { position: relative; display: grid; min-width: 78px; align-content: center; padding: 8px 12px; overflow: visible; border: 1px solid rgba(255,255,255,.2); border-radius: 15px; background: rgba(2,6,23,.9); box-shadow: 0 4px 12px rgba(0,0,0,.24); text-align: center; }
       .hud-chip > span:first-child { color: #cbd5e1; font-size: .59rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
@@ -268,7 +278,24 @@
               <div class="hud-chip hud-score" id="score-hud"><span>Points</span><strong id="score">0</strong><span class="score-gain" id="score-gain" aria-hidden="true"></span></div>
               <div class="hud-chip hud-time"><span>Timer</span><strong id="question-time">0.0s</strong></div>
             </div>
-            <button class="stage-fullscreen" id="full-screen" type="button" aria-pressed="false" aria-label="Make camera full screen">⛶ Full screen</button>
+            <div class="stage-controls">
+              <button class="stage-sound-settings" id="sound-settings-toggle" type="button" aria-label="Sound settings" aria-expanded="false" aria-controls="sound-settings-panel">♫ Sound</button>
+              <button class="stage-fullscreen" id="full-screen" type="button" aria-pressed="false" aria-label="Make camera full screen">⛶ Full screen</button>
+            </div>
+            <section class="sound-settings-panel" id="sound-settings-panel" role="group" aria-labelledby="sound-settings-title" hidden>
+              <h2 id="sound-settings-title">Sound settings</h2>
+              <div class="sound-setting">
+                <label for="music-volume">Underwater music</label>
+                <output id="music-volume-output" for="music-volume">22%</output>
+                <input id="music-volume" type="range" min="0" max="100" step="1" value="22" aria-valuetext="22%" />
+              </div>
+              <div class="sound-setting">
+                <label for="effects-volume">Sound effects</label>
+                <output id="effects-volume-output" for="effects-volume">100%</output>
+                <input id="effects-volume" type="range" min="0" max="100" step="1" value="100" aria-valuetext="100%" />
+              </div>
+              <button class="sound-settings-done" id="sound-settings-done" type="button">Done</button>
+            </section>
             <div class="celebration" id="celebration" aria-hidden="true"></div>
             <div class="problem" aria-hidden="true"><span>Solve it</span><strong id="problem">36 + 27</strong></div>
             <div class="answers" id="answers">
@@ -346,6 +373,6 @@
         </aside>
       </section>
     </main>
-    <script type="module" src="/air-math/app.js?v=vercel-1"></script>
+    <script type="module" src="/air-math/app.js?v=vercel-sound-settings-1"></script>
   </body>
 </html>

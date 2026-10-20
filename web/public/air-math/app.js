@@ -56,7 +56,18 @@ const MODES = {
 const video = document.querySelector("#camera");
 const underwaterBackgroundVideo = document.querySelector("#underwater-background-video");
 const underwaterBackgroundMusic = document.querySelector("#underwater-background-music");
-underwaterBackgroundMusic.volume = 0.22;
+const soundSettingsButton = document.querySelector("#sound-settings-toggle");
+const soundSettingsPanel = document.querySelector("#sound-settings-panel");
+const soundSettingsDoneButton = document.querySelector("#sound-settings-done");
+const musicVolumeSlider = document.querySelector("#music-volume");
+const effectsVolumeSlider = document.querySelector("#effects-volume");
+const musicVolumeOutput = document.querySelector("#music-volume-output");
+const effectsVolumeOutput = document.querySelector("#effects-volume-output");
+const MUSIC_VOLUME_STORAGE_KEY = "air-math-underwater-music-volume";
+const EFFECTS_VOLUME_STORAGE_KEY = "air-math-sound-effects-volume";
+let musicVolume = readAudioVolume(MUSIC_VOLUME_STORAGE_KEY, 0.22);
+let soundEffectsVolume = readAudioVolume(EFFECTS_VOLUME_STORAGE_KEY, 1);
+underwaterBackgroundMusic.volume = musicVolume;
 const stage = document.querySelector("#stage");
 const stageContent = document.querySelector("#stage-content");
 const canvas = document.querySelector("#hand-canvas");
@@ -154,9 +165,25 @@ let pinchArmed = true;
 let hoverIndex = null;
 let cameraSession = 0;
 let audioContext = null;
+let effectsMasterGain = null;
 
 function randomInteger(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function readAudioVolume(key, fallback) {
+  try {
+    const saved = window.localStorage.getItem(key);
+    if (saved === null) return fallback;
+    const parsed = Number(saved);
+    return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveAudioVolume(key, volume) {
+  try { window.localStorage.setItem(key, String(volume)); } catch { /* Audio settings still work until this page closes. */ }
 }
 
 function shuffle(items) {
@@ -383,11 +410,44 @@ function renderModeChoices() {
 }
 
 function syncUnderwaterMusic() {
-  if (gameMode !== "underwater" || !gamePlaying || document.hidden) {
+  if (gameMode !== "underwater" || !gamePlaying || document.hidden || musicVolume === 0) {
     underwaterBackgroundMusic.pause();
     return;
   }
   if (underwaterBackgroundMusic.paused) void underwaterBackgroundMusic.play().catch(() => {});
+}
+
+function updateSoundSettings() {
+  const musicPercent = Math.round(musicVolume * 100);
+  const effectsPercent = Math.round(soundEffectsVolume * 100);
+  musicVolumeSlider.value = String(musicPercent);
+  effectsVolumeSlider.value = String(effectsPercent);
+  musicVolumeOutput.textContent = musicPercent === 0 ? "Off" : `${musicPercent}%`;
+  effectsVolumeOutput.textContent = effectsPercent === 0 ? "Off" : `${effectsPercent}%`;
+  musicVolumeSlider.setAttribute("aria-valuetext", musicPercent === 0 ? "Off" : `${musicPercent}%`);
+  effectsVolumeSlider.setAttribute("aria-valuetext", effectsPercent === 0 ? "Off" : `${effectsPercent}%`);
+  underwaterBackgroundMusic.volume = musicVolume;
+  if (effectsMasterGain && audioContext) {
+    effectsMasterGain.gain.setTargetAtTime(soundEffectsVolume, audioContext.currentTime, 0.015);
+  }
+}
+
+function setSoundSettingsOpen(open) {
+  soundSettingsPanel.hidden = !open;
+  soundSettingsButton.setAttribute("aria-expanded", String(open));
+}
+
+function setAudioVolume(kind, percent) {
+  const volume = Math.min(1, Math.max(0, Number(percent) / 100));
+  if (kind === "music") {
+    musicVolume = volume;
+    saveAudioVolume(MUSIC_VOLUME_STORAGE_KEY, volume);
+  } else {
+    soundEffectsVolume = volume;
+    saveAudioVolume(EFFECTS_VOLUME_STORAGE_KEY, volume);
+  }
+  updateSoundSettings();
+  if (kind === "music") syncUnderwaterMusic();
 }
 
 function openPanel({ icon = "⌁", title, message, button, action, disabled = false }) {
@@ -512,6 +572,11 @@ function unlockAudio() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
     if (!audioContext) audioContext = new AudioContextClass();
+    if (!effectsMasterGain) {
+      effectsMasterGain = audioContext.createGain();
+      effectsMasterGain.gain.value = soundEffectsVolume;
+      effectsMasterGain.connect(audioContext.destination);
+    }
     if (audioContext.state === "suspended") audioContext.resume();
   } catch {
     // Sound is an enhancement; the game still works when Web Audio is unavailable.
@@ -519,7 +584,7 @@ function unlockAudio() {
 }
 
 function playTone(frequency, duration, { type = "sine", volume = 0.08, endFrequency = frequency, delay = 0 } = {}) {
-  if (!audioContext || audioContext.state !== "running") return;
+  if (!audioContext || audioContext.state !== "running" || soundEffectsVolume === 0) return;
   const start = audioContext.currentTime + delay;
   const oscillator = audioContext.createOscillator();
   const gain = audioContext.createGain();
@@ -530,7 +595,7 @@ function playTone(frequency, duration, { type = "sine", volume = 0.08, endFreque
   gain.gain.exponentialRampToValueAtTime(volume, start + 0.018);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
   oscillator.connect(gain);
-  gain.connect(audioContext.destination);
+  gain.connect(effectsMasterGain || audioContext.destination);
   oscillator.start(start);
   oscillator.stop(start + duration + 0.02);
 }
@@ -786,7 +851,7 @@ function finishRound() {
 }
 
 function selectAnswer(index) {
-  if (!gamePlaying || answerLocked || !Number.isInteger(index)) return;
+  if (!gamePlaying || answerLocked || !Number.isInteger(index) || !soundSettingsPanel.hidden) return;
   const selected = question.options[index];
   if (selected === undefined) return;
   const responseTimeMs = stopQuestionTimer();
@@ -864,7 +929,7 @@ function refreshStageMetrics() {
 }
 
 function answerAtPoint(x, y) {
-  if (!gamePlaying || answerLocked) return null;
+  if (!gamePlaying || answerLocked || !soundSettingsPanel.hidden) return null;
   if (gameMode === "underwater" && bubbleMotionActive) {
     const now = performance.now();
     const index = bubblePositions.findIndex((bubble) => now >= bubble.startedAt && Math.hypot(x - bubble.x, y - bubble.y) <= bubble.radius);
@@ -1536,6 +1601,18 @@ leaderboardLevelButtons.forEach((button) => button.addEventListener("click", () 
 }));
 newRoundButton.addEventListener("click", startRound);
 fullscreenButton.addEventListener("click", toggleFullscreen);
+soundSettingsButton.addEventListener("click", () => setSoundSettingsOpen(soundSettingsPanel.hidden));
+soundSettingsDoneButton.addEventListener("click", () => setSoundSettingsOpen(false));
+musicVolumeSlider.addEventListener("input", () => setAudioVolume("music", musicVolumeSlider.value));
+effectsVolumeSlider.addEventListener("input", () => setAudioVolume("effects", effectsVolumeSlider.value));
+document.addEventListener("click", (event) => {
+  if (soundSettingsPanel.hidden || !(event.target instanceof Node)) return;
+  if (soundSettingsPanel.contains(event.target) || soundSettingsButton.contains(event.target)) return;
+  setSoundSettingsOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !soundSettingsPanel.hidden) setSoundSettingsOpen(false);
+});
 document.addEventListener("fullscreenchange", updateFullscreenButton);
 document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
 stopCameraButton.addEventListener("click", () => {
@@ -1545,6 +1622,7 @@ stopCameraButton.addEventListener("click", () => {
 });
 window.addEventListener("keydown", (event) => {
   if (!gamePlaying || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.target instanceof HTMLElement && event.target.matches("input, textarea, select")) return;
   const index = Number(event.key) - 1;
   if (Number.isInteger(index) && index >= 0 && index < 3) { event.preventDefault(); selectAnswer(index); }
 });
@@ -1575,6 +1653,7 @@ try {
 } catch {
   playerNameInput.value = "";
 }
+updateSoundSettings();
 void loadLeaderboard();
 renderLevelChoices();
 renderQuestion();
