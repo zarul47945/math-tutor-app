@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 const UPSTREAM =
   "https://air-math-pinch-game.zarul47945.chatgpt.site/api/leaderboard";
-const VALID_LEVELS = new Set(["one-one", "one-two", "two-two"]);
+const VALID_LEVELS = new Set(["one-one", "one-two", "two-two", "sifir-1-5", "sifir-2-12"]);
 const MAX_BODY_BYTES = 2048;
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const MAX_SCORE = 2500;

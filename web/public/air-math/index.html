@@ -172,7 +172,7 @@
       .name-input { width: 100%; margin-top: 7px; padding: 12px 13px; border: 1px solid rgba(255,255,255,.16); border-radius: 13px; background: rgba(2,6,23,.52); color: #f8fafc; outline: none; }
       .name-input:focus { border-color: #67e8f9; box-shadow: 0 0 0 3px rgba(103,232,249,.15); }
       .name-hint, .leaderboard-status { margin: 9px 0 0 !important; color: #94a3b8 !important; font-size: .75rem !important; }
-      .leaderboard-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 13px; }
+      .leaderboard-levels { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 13px; }
       .leaderboard-level { min-width: 0; padding: 9px 5px; border: 1px solid rgba(255,255,255,.12); border-radius: 11px; background: rgba(2,6,23,.42); color: #cbd5e1; font-size: .72rem; font-weight: 800; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
       .leaderboard-level:hover { border-color: rgba(103,232,249,.6); color: #f8fafc; }
       .leaderboard-level.active { border-color: #67e8f9; background: rgba(34,211,238,.14); color: #cffafe; box-shadow: inset 0 0 0 1px rgba(103,232,249,.18); }
@@ -213,7 +213,7 @@
           <div class="title-row">
             <div>
               <h1>Pinch the answer.</h1>
-              <p class="intro">Choose a level, solve 10 addition questions, and build your score with quick answers and streaks. Pinch the answer in the air.</p>
+              <p class="intro">Choose a level, solve 10 math questions, and build your score with quick answers and streaks. Pinch an answer in the air.</p>
             </div>
           </div>
           <div class="stat-row" aria-label="Game progress">
@@ -336,10 +336,12 @@
           </section>
           <section class="card level-card">
             <h2>🎯 Choose your level</h2>
-            <div class="level-options" role="group" aria-label="Addition level">
+            <div class="level-options" role="group" aria-label="Math level">
               <button class="level-choice active" type="button" data-level="one-one" aria-pressed="true"><strong>Level 1</strong><span>1 digit + 1 digit</span></button>
               <button class="level-choice" type="button" data-level="one-two" aria-pressed="false"><strong>Level 2</strong><span>1 digit + 2 digit</span></button>
               <button class="level-choice" type="button" data-level="two-two" aria-pressed="false"><strong>Level 3</strong><span>2 digit + 2 digit</span></button>
+              <button class="level-choice" type="button" data-level="sifir-1-5" aria-pressed="false"><strong>Level 4</strong><span>Sifir 1–5</span></button>
+              <button class="level-choice" type="button" data-level="sifir-2-12" aria-pressed="false"><strong>Level 5</strong><span>Sifir 2–12</span></button>
             </div>
             <p class="level-description" id="level-description">Level 1: build confidence with single-digit addition.</p>
           </section>
@@ -361,6 +363,8 @@
               <button class="leaderboard-level active" type="button" data-leaderboard-level="one-one" aria-pressed="true" aria-label="Level 1 leaderboard, 1 digit plus 1 digit">Level 1</button>
               <button class="leaderboard-level" type="button" data-leaderboard-level="one-two" aria-pressed="false" aria-label="Level 2 leaderboard, 1 digit plus 2 digit">Level 2</button>
               <button class="leaderboard-level" type="button" data-leaderboard-level="two-two" aria-pressed="false" aria-label="Level 3 leaderboard, 2 digit plus 2 digit">Level 3</button>
+              <button class="leaderboard-level" type="button" data-leaderboard-level="sifir-1-5" aria-pressed="false" aria-label="Level 4 leaderboard, multiplication tables 1 through 5">Level 4</button>
+              <button class="leaderboard-level" type="button" data-leaderboard-level="sifir-2-12" aria-pressed="false" aria-label="Level 5 leaderboard, multiplication tables 2 through 12">Level 5</button>
             </div>
             <ol class="leaderboard-list" id="leaderboard-list"><li class="leaderboard-empty">Loading scores…</li></ol>
             <p class="leaderboard-status" id="leaderboard-status">Top 10 scores for this level.</p>
@@ -373,6 +377,6 @@
         </aside>
       </section>
     </main>
-    <script type="module" src="/air-math/app.js?v=vercel-sound-settings-1"></script>
+    <script type="module" src="/air-math/app.js?v=vercel-multiplication-levels-1"></script>
   </body>
 </html>

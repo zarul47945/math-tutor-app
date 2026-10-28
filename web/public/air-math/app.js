@@ -26,6 +26,9 @@ const LEVELS = {
     title: "Level 1",
     label: "1 digit + 1 digit",
     description: "Build confidence with single-digit addition.",
+    operator: "+",
+    operationWord: "plus",
+    calculate: (first, second) => first + second,
     minAnswer: 2,
     maxAnswer: 18,
     operands: () => ({ first: randomInteger(1, 9), second: randomInteger(1, 9) }),
@@ -34,6 +37,9 @@ const LEVELS = {
     title: "Level 2",
     label: "1 digit + 2 digit",
     description: "Add a single-digit number to a two-digit number.",
+    operator: "+",
+    operationWord: "plus",
+    calculate: (first, second) => first + second,
     minAnswer: 11,
     maxAnswer: 108,
     operands: () => ({ first: randomInteger(1, 9), second: randomInteger(10, 99) }),
@@ -42,9 +48,34 @@ const LEVELS = {
     title: "Level 3",
     label: "2 digit + 2 digit",
     description: "Take on two-digit numbers with sums up to 198.",
+    operator: "+",
+    operationWord: "plus",
+    calculate: (first, second) => first + second,
     minAnswer: 20,
     maxAnswer: 198,
     operands: () => ({ first: randomInteger(10, 99), second: randomInteger(10, 99) }),
+  },
+  "sifir-1-5": {
+    title: "Level 4",
+    label: "Sifir 1–5",
+    description: "Practice multiplication tables 1 through 5.",
+    operator: "×",
+    operationWord: "times",
+    calculate: (first, second) => first * second,
+    minAnswer: 1,
+    maxAnswer: 60,
+    operands: () => ({ first: randomInteger(1, 5), second: randomInteger(1, 12) }),
+  },
+  "sifir-2-12": {
+    title: "Level 5",
+    label: "Sifir 2–12",
+    description: "Practice multiplication tables 2 through 12.",
+    operator: "×",
+    operationWord: "times",
+    calculate: (first, second) => first * second,
+    minAnswer: 2,
+    maxAnswer: 144,
+    operands: () => ({ first: randomInteger(2, 12), second: randomInteger(1, 12) }),
   },
 };
 
@@ -198,7 +229,7 @@ function shuffle(items) {
 function makeQuestion(selectedLevel = levelKey) {
   const level = LEVELS[selectedLevel];
   const { first, second } = level.operands();
-  const answer = first + second;
+  const answer = level.calculate(first, second);
   const variation = answer < 25 ? 9 : answer < 100 ? 18 : 30;
   const choices = new Set([answer]);
   let attempts = 0;
@@ -211,7 +242,7 @@ function makeQuestion(selectedLevel = levelKey) {
     if (answer - offset >= level.minAnswer) choices.add(answer - offset);
     if (answer + offset <= level.maxAnswer) choices.add(answer + offset);
   }
-  return { first, second, answer, options: shuffle([...choices]) };
+  return { first, second, answer, operator: level.operator, operationWord: level.operationWord, options: shuffle([...choices]) };
 }
 
 function handDistance(first, second) {
@@ -329,7 +360,7 @@ async function submitRoundScore(entry) {
 function setFeedback(message) {
   feedbackElement.textContent = message;
   announcementElement.textContent = gamePlaying
-    ? `Question ${Math.min(questionsAnswered + 1, ROUND_LENGTH)} of ${ROUND_LENGTH}: ${question.first} plus ${question.second}. Choices are ${question.options.join(", ")}. ${message}`
+    ? `Question ${Math.min(questionsAnswered + 1, ROUND_LENGTH)} of ${ROUND_LENGTH}: ${question.first} ${question.operationWord} ${question.second}. Choices are ${question.options.join(", ")}. ${message}`
     : message;
 }
 
@@ -349,7 +380,7 @@ function updateRoundProgress() {
 }
 
 function renderQuestion() {
-  problemElement.textContent = `${question.first} + ${question.second}`;
+  problemElement.textContent = `${question.first} ${question.operator} ${question.second}`;
   answerButtons.forEach((button, index) => {
     button.textContent = question.options[index];
     button.setAttribute("aria-label", `Answer ${index + 1}: ${question.options[index]}`);
@@ -886,7 +917,7 @@ function selectAnswer(index) {
     score = Math.max(0, score - WRONG_ANSWER_PENALTY);
     scoreElement.textContent = score;
     streakElement.textContent = streak;
-    setFeedback(`Not quite — ${question.first} + ${question.second} = ${question.answer}. -${WRONG_ANSWER_PENALTY} points; streak reset.`);
+    setFeedback(`Not quite — ${question.first} ${question.operator} ${question.second} = ${question.answer}. -${WRONG_ANSWER_PENALTY} points; streak reset.`);
   }
 
   const delay = correct ? 900 : 1250;
